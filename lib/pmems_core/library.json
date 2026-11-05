@@ -1,0 +1,7 @@
+{
+  "name": "pmems_core",
+  "version": "0.1.0",
+  "description": "Hardware-independent core logic of PMeMS Controller 1: CRC16, Vision protocol, Can tracking FIFO, Modbus PDU, pulse ramp",
+  "frameworks": "*",
+  "platforms": "*"
+}

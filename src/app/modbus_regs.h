@@ -1,0 +1,34 @@
+/**
+ * @file modbus_regs.h
+ * @brief Register map shared by HMI (Modbus RTU slave, §7.1) and SCADA (Modbus TCP, §7.3).
+ *
+ * Holding registers (4xxxx, 0-based index):
+ *   0  40001 command: 1 START, 2 STOP, 3 PAUSE, 4 RESET_ALARM, 5 START_HOMING,
+ *                     (ext) 6 JOG_ENTER, 7 JOG_EXIT
+ *   1  40002 recipe id (1..16)
+ *   2  40003 conveyor speed, cans/min (60..156)
+ *   3  40004 theta offset x100 (-1800..+1800 = -18.00..+18.00 deg)
+ *   4  40005 press time p5_down_dwell_ms (20..100)
+ *   5  40006 M4 overrun pulses (0..200)
+ *   9  40010 (ext) jog axis 0..4 = M2..M6
+ *  10  40011 (ext) jog direction -1/0/+1
+ *
+ * Input registers (3xxxx, 0-based index). 32-bit values: high word first.
+ *   0  30001 FSM state      1  30002 alarm code     2  30003 speed cans/min
+ *   3  30004..5 fed cans    5  30006..7 OK cans     7  30008..9 NG cans
+ *   9  30010 M6 height 0.1 mm                     10  30011 air pressure 0.01 MPa
+ *  11  30012..13 DI bitmask                       13  30014..15 DO bitmask
+ *  (ext) 15 VFD out freq x100, 16 VFD current x10, 17 cans on belt,
+ *        18..19 active alarm bitmask, 20 vision CRC errors, 21 vision late results
+ */
+#ifndef MODBUS_REGS_H
+#define MODBUS_REGS_H
+
+#include "modbus_pdu.h"
+
+#define MB_HOLDING_COUNT 50U
+#define MB_INPUT_COUNT   40U
+
+const MbMap_t *modbus_regs_map(void);
+
+#endif
