@@ -46,6 +46,8 @@ static uint16_t s_last_speed;
 static TrackingCounters_t s_cnt_at_start;
 static IWDG_HandleTypeDef s_iwdg;
 static volatile bool s_apply_req;
+static volatile uint16_t s_manual_req;      /* requested manual DO bits (40012) */
+static volatile bool s_manual_pending;
 
 /* ------------------------------------------------------------------------ */
 void machine_init(void)
@@ -79,6 +81,31 @@ static void apply_recipe_if_requested(void)
         alarm_raise(ALM_16_HOMING_FAILED);   /* target outside soft limits */
     }
     s_apply_req = false;
+}
+
+bool machine_manual_outputs(uint16_t mask)
+{
+    if (s_state != MS_MANUAL_JOG || (mask & (uint16_t)~MANUAL_DO_MASK) != 0U) {
+        return false;
+    }
+    /* Interlock: never lower the labeling cylinder P5 while the rotary table turns */
+    if ((mask & (1U << DO_CYL_P5)) != 0U && motion_busy(AXIS_M3)) {
+        return false;
+    }
+    s_manual_req = mask;
+    s_manual_pending = true;   /* applied by the machine task (single writer) */
+    return true;
+}
+
+/* All manually driven outputs off (leaving MANUAL_JOG, alarm, E-Stop) */
+static void manual_outputs_off(void)
+{
+    for (uint8_t i = 0; i < 15U; i++) {
+        do_set((DoBit_t)i, false);
+    }
+    s_manual_req = 0;
+    s_manual_pending = false;
+    do_commit_now();
 }
 
 bool machine_recipe_change_allowed(void)
@@ -124,6 +151,9 @@ static void account_lifetime(void)
 static void enter(MachineState_t st)
 {
     MachineState_t prev = s_state;
+    if (prev == MS_MANUAL_JOG && st != MS_MANUAL_JOG) {
+        manual_outputs_off();
+    }
     if (prev == MS_AUTO_RUN || prev == MS_AUTO_PAUSE) {
         if (st != MS_AUTO_RUN && st != MS_AUTO_PAUSE) {
             account_lifetime();
@@ -407,10 +437,22 @@ static void fsm_step(MachineCmd_t cmd)
             motion_abort_all();
             params_mut()->jog_dir = 0;
             enter(sev >= ALM_SEV_STOP ? MS_ALARM_STOP : MS_READY);
-        } else if (p->jog_dir != 0 && !motion_busy(ax)) {
+        }
+        /* Interlock: no M3 rotation unless P5 is confirmed up */
+        bool jog_allowed = !(ax == AXIS_M3 && !di(DI_P5_UP));
+        if (p->jog_dir != 0 && !motion_busy(ax) && jog_allowed) {
             (void)motion_jog(ax, p->jog_dir > 0, 0.1f);
-        } else if (p->jog_dir == 0 && motion_busy(ax)) {
+        } else if ((p->jog_dir == 0 || !jog_allowed) && motion_busy(ax)) {
             motion_stop(ax);
+        }
+        /* Manual outputs requested through 40012 */
+        if (s_manual_pending) {
+            uint16_t m = s_manual_req;
+            s_manual_pending = false;
+            for (uint8_t i = 0; i < 15U; i++) {
+                do_set((DoBit_t)i, ((m >> i) & 1U) != 0U);
+            }
+            do_commit_now();
         }
         break;
     }

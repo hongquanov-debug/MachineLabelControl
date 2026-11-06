@@ -21,6 +21,7 @@ class FakeController:
         self.holding = [0] * 50
         self.holding[1] = 1                   # active recipe
         self.running = False
+        self.jog = False
         self.store = {i: Recipe(recipe_id=i, name=f"R{i}").to_regs() for i in range(1, 17)}
         self.buf = list(self.store[1])
         self.writes = []                      # (address, values) per request
@@ -50,6 +51,8 @@ class FakeController:
             a = address + i
             if a == 1 and self.running:
                 return _Resp(error=True)      # MB_EX_DEVICE_FAILURE
+            if a == 11 and (not self.jog or v & ~0x7FFF):
+                return _Resp(error=True)      # 40012 outside MANUAL_JOG
             if a == RCP_FIRST + 13 or a == RCP_STATUS:
                 continue                       # read-only
             if RCP_FIRST <= a < RCP_FIRST + RCP_DATA_COUNT:
@@ -126,6 +129,19 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(self.plc.read_status().state_name, "READY")
         self.plc.send_command(MachineCmd.START_HOMING)
         self.assertEqual(self.fake.holding[0], 5)
+
+    def test_manual_outputs_only_in_jog(self):
+        with self.assertRaises(PmemsError):          # READY: refused
+            self.plc.set_output("P4", True)
+        self.fake.jog = True
+        self.plc.set_output("P4", True)
+        self.plc.set_output("P3", True)
+        self.assertEqual(self.fake.holding[11], 0b1100)
+        self.assertTrue(self.plc.read_manual_outputs()["P4"])
+        self.plc.set_output("P4", False)
+        self.assertEqual(self.fake.holding[11], 0b0100)
+        with self.assertRaises(ValueError):
+            self.plc.set_output("P9", True)
 
     def test_argument_checks(self):
         with self.assertRaises(ValueError):

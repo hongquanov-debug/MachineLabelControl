@@ -124,6 +124,47 @@ enum {
 #define HOMING_TIMEOUT_MS          30000U
 
 /* ===================================================================== */
+/* §6 Safety input source (J_SAFETY)                                      */
+/* ===================================================================== */
+/*
+ * PCB v1 has a defect on J_SAFETY: E-Stop / door / air / reset cannot be wired
+ * to the MCU pins. Workaround: one extra 74HCT165 ("LI extension", 8 inputs)
+ * chained at the END of the LI32 chain (its QH -> SER of the 4th LI32 chip,
+ * its own SER tied to GND). The scan then reads 6 bytes:
+ *     byte 0..3 = LI32, byte 4 = safety extension, byte 5 = check byte (0x00).
+ *
+ * Fail-safe rules (see docs/SPEC_NOTES.md A20):
+ *  - wire so that a HEALTHY signal reads 1 (E-Stop released = 1, door closed = 1,
+ *    air OK = 1) and keep SAFETY_EXT_INVERT_MASK = 0. A data line stuck low then
+ *    reads "unsafe", and a disconnected cable reads 0xFF on the check byte
+ *    -> bus fault -> all safety signals forced "unsafe".
+ *  - the MCU only MONITORS: the E-Stop must also cut KM1 in hardware
+ *    (safety relay or NC contact in series with the KM1 coil).
+ */
+#define SAFETY_SRC_GPIO          0   /* PCB v2: J_SAFETY wired to MCU pins (board_pins.h) */
+#define SAFETY_SRC_LI_EXT        1   /* PCB v1: 5th 74HCT165 at the end of the LI32 chain */
+#ifndef SAFETY_SOURCE
+#define SAFETY_SOURCE            SAFETY_SRC_LI_EXT
+#endif
+#define DIO_DI_EXT_BYTES         ((SAFETY_SOURCE == SAFETY_SRC_LI_EXT) ? 1U : 0U)
+#define SAFETY_EXT_BIT_ESTOP     0   /* 1 = E-Stop released (NC chain closed) */
+#define SAFETY_EXT_BIT_DOOR      1   /* 1 = guard door closed */
+#define SAFETY_EXT_BIT_AIR       2   /* 1 = air pressure >= 0.5 MPa */
+#define SAFETY_EXT_BIT_RESET     3   /* 1 = SAFETY_RESET button pressed */
+#define SAFETY_EXT_INVERT_MASK   0x00U /* TODO(HW): keep 0 (see fail-safe rules) */
+
+/*
+ * BENCH MODE - for testing the board on a desk WITHOUT field wiring only.
+ * Safety inputs are treated as healthy, but KM1 is LOCKED OFF in bsp_km1_set(),
+ * so the motor / drive power is never switched on. Reported in input register
+ * 30023 bit3. Never set it here: build the dedicated PlatformIO environment
+ * "controller1_bench" (platformio.ini) instead.
+ */
+#ifndef SAFETY_BENCH_MODE
+#define SAFETY_BENCH_MODE        0
+#endif
+
+/* ===================================================================== */
 /* §6 Safety / FSM                                                        */
 /* ===================================================================== */
 #define PURGE_VFD_HZ_X100          1000U     /* 10 Hz */

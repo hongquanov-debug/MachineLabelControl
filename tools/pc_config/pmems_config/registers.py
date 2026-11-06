@@ -18,6 +18,16 @@ HR_SPEED = 2            # 40003
 HR_THETA_OFFSET = 3     # 40004 (x100 deg, -1800..1800)
 HR_PRESS_MS = 4         # 40005
 HR_OVERRUN = 5          # 40006
+HR_JOG_AXIS = 9         # 40010 (0=M2 .. 4=M6)
+HR_JOG_DIR = 10         # 40011 (-1 / 0 / +1)
+HR_MANUAL_DO = 11       # 40012 manual outputs, MANUAL_JOG only
+
+# Bit n of 40012 = DO n (src/app/io_map.h). Only DO 0..14 can be driven by hand.
+MANUAL_OUTPUTS = {
+    "P1": 0, "P2": 1, "P3": 2, "P4": 3, "P5": 4, "P7": 5, "P8": 6, "M7": 7,
+    "VAC1": 8, "VAC2": 9, "VAC3": 10, "VAC4": 11, "VAC5": 12, "VAC6": 13, "VAC_BLOW": 14,
+}
+MANUAL_DO_MASK = 0x7FFF
 
 RCP_FIRST = 20          # 40021 edit recipe id
 RCP_DATA_COUNT = 19     # 40021..40039
@@ -219,6 +229,8 @@ class MachineStatus:
     recipe_change_allowed: bool
     eeprom_ok: bool
     m6_moving: bool
+    safety_bench_mode: bool = False   # firmware built without safety chain (KM1 locked off)
+    safety_via_li_ext: bool = False   # PCB v1: safety read through the LI extension
 
     @property
     def state_name(self) -> str:
@@ -260,4 +272,6 @@ class MachineStatus:
             recipe_change_allowed=bool(r[22] & 1),
             eeprom_ok=bool(r[22] & 2),
             m6_moving=bool(r[22] & 4),
+            safety_bench_mode=bool(r[22] & 8),
+            safety_via_li_ext=bool(r[22] & 16),
         )

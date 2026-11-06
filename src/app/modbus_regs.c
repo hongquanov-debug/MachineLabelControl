@@ -137,6 +137,7 @@ static uint8_t rd_holding(void *ctx, uint16_t a, uint16_t *v)
     case 5:  recipe_get_active(&r); *v = r.m4_overrun_pulses; break;
     case 9:  *v = params_get()->jog_axis; break;
     case 10: *v = (uint16_t)params_get()->jog_dir; break;
+    case 11: *v = (uint16_t)(do_image() & MANUAL_DO_MASK); break;
     default: *v = 0; break;
     }
     return MB_EX_NONE;
@@ -187,6 +188,8 @@ static uint8_t wr_holding(void *ctx, uint16_t a, uint16_t v)
         if ((int16_t)v < -1 || (int16_t)v > 1) return MB_EX_ILLEGAL_VALUE;
         params_mut()->jog_dir = (int16_t)v;
         return MB_EX_NONE;
+    case 11:
+        return machine_manual_outputs(v) ? MB_EX_NONE : MB_EX_DEVICE_FAILURE;
     default:
         return MB_EX_NONE;   /* reserved: accepted, ignored */
     }
@@ -223,7 +226,8 @@ static uint8_t rd_input(void *ctx, uint16_t a, uint16_t *v)
     case 20: *v = (uint16_t)vis.crc_errors; break;
     case 21: *v = (uint16_t)vis.rx_late; break;
     case 22: *v = (uint16_t)((machine_recipe_change_allowed() ? 1U : 0U) | (recipe_eeprom_ok() ? 2U : 0U) |
-                             (machine_recipe_applying() ? 4U : 0U));
+                             (machine_recipe_applying() ? 4U : 0U) | (SAFETY_BENCH_MODE ? 8U : 0U) |
+                             (SAFETY_SOURCE == SAFETY_SRC_LI_EXT ? 16U : 0U));
              break;
     default: *v = 0; break;
     }

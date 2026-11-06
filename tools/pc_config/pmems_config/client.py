@@ -16,6 +16,11 @@ from typing import Any, Optional
 
 from .registers import (
     HR_COMMAND,
+    HR_JOG_AXIS,
+    HR_JOG_DIR,
+    HR_MANUAL_DO,
+    MANUAL_DO_MASK,
+    MANUAL_OUTPUTS,
     HR_RECIPE_SELECT,
     HR_SPEED,
     HR_THETA_OFFSET,
@@ -124,6 +129,36 @@ class PmemsClient:
         if not -1800 <= v <= 1800:
             raise ValueError("offset tinh chinh -18.0..+18.0 do")
         self._write(HR_THETA_OFFSET, v)
+
+    # ---------------- manual mode (MANUAL_JOG only) ----------------
+    def jog(self, axis: int, direction: int) -> None:
+        """axis 0..4 = M2..M6, direction -1 / 0 (stop) / +1. Hold-to-run: send 0 on release."""
+        if not 0 <= axis <= 4 or direction not in (-1, 0, 1):
+            raise ValueError("axis 0..4, direction -1/0/+1")
+        self._write(HR_JOG_AXIS, axis)
+        self._write(HR_JOG_DIR, direction & 0xFFFF)
+
+    def read_manual_outputs(self) -> dict[str, bool]:
+        mask = self._read_holding(HR_MANUAL_DO, 1)[0]
+        return {name: bool(mask >> bit & 1) for name, bit in MANUAL_OUTPUTS.items()}
+
+    def set_manual_outputs(self, mask: int) -> None:
+        """Write all 15 manual outputs at once (bit n = DO n)."""
+        if mask & ~MANUAL_DO_MASK:
+            raise ValueError("only DO 0..14 can be driven manually")
+        try:
+            self._write(HR_MANUAL_DO, mask)
+        except PmemsError as e:
+            raise PmemsError("Bi tu choi: chi dieu khien tay o che do MANUAL_JOG, "
+                             "va khong ha P5 khi mam M3 dang quay") from e
+
+    def set_output(self, name: str, on: bool) -> None:
+        """Toggle one output by name, e.g. set_output("P4", True)."""
+        if name not in MANUAL_OUTPUTS:
+            raise ValueError(f"unknown output {name}, valid: {', '.join(MANUAL_OUTPUTS)}")
+        mask = self._read_holding(HR_MANUAL_DO, 1)[0] & MANUAL_DO_MASK
+        bit = 1 << MANUAL_OUTPUTS[name]
+        self.set_manual_outputs(mask | bit if on else mask & ~bit)
 
     # ---------------- recipes ----------------
     def _recipe_cmd_status(self) -> RecipeStatus:

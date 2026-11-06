@@ -33,7 +33,8 @@ void station_feed_task(void *arg)
 
     for (;;) {
         if (!s_enabled) {
-            if (machine_state() != MS_ESTOP) {
+            MachineState_t ms = machine_state();
+            if (ms != MS_ESTOP && ms != MS_MANUAL_JOG) {
                 /* blocking position: P1 out (holds the queue), P2 back (ALM_03/ALM_07) */
                 do_set(DO_CYL_P1, true);
                 do_set(DO_CYL_P2, false);

@@ -77,8 +77,10 @@ và module xử lý ảnh của bạn.
 | Ngõ vào / ra | 32 + 24 "đèn LED" (`QLabel` tròn đổi màu) | `status.di` (30012–13), `status.do` (30014–15); tên bit lấy từ `src/app/io_map.h` |
 | Chạy tay | Chọn trục, nút giữ ◀ / ▶, xi lanh | 40001 = 6/7 (vào/thoát JOG), 40010 = trục, 40011 = −1/0/+1. Nút giữ: dùng tín hiệu `pressed` / `released` của `QPushButton` |
 
-> Bản mẫu có điều khiển xi lanh bằng tay, nhưng firmware **chưa có** thanh ghi cho việc này.
-> Nếu cần, phải bổ sung thanh ghi ở `src/app/modbus_regs.c`.
+Xi lanh / van bằng tay: thanh ghi **40012** (bit n = DO n, 0..14), chỉ nhận ở MANUAL_JOG.
+Python: `plc.set_output("P4", True)`, `plc.read_manual_outputs()`. Bị từ chối (ngoại lệ 04) khi
+không ở chạy tay hoặc khi hạ P5 lúc mâm M3 đang quay → hiện `QMessageBox.warning`.
+Cờ `status.safety_bench_mode` = True → hiện băng cảnh báo đỏ "CHẾ ĐỘ BÀN THỬ – KHÔNG CÓ AN TOÀN".
 
 ### 2.4. Cấu hình (4 tab)
 

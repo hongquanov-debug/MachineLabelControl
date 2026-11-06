@@ -104,6 +104,38 @@ static void check_driver_alarms(uint32_t img)
     }
 }
 
+/**
+ * Đọc chuỗi an toàn từ nguồn được cấu hình (app_config.h):
+ *  - SAFETY_BENCH_MODE : bỏ qua (coi như an toàn) - KM1 bị khóa tắt ở bsp_km1_set()
+ *  - SAFETY_SRC_GPIO   : chân MCU trực tiếp (PCB v2, J_SAFETY)
+ *  - SAFETY_SRC_LI_EXT : byte mở rộng của chuỗi 74HCT165 (PCB v1)
+ * Mất bus I/O (tuột cáp) -> mọi tín hiệu an toàn = KHÔNG an toàn.
+ */
+static void read_safety(uint8_t ext, bool bus_ok)
+{
+#if SAFETY_BENCH_MODE
+    (void)ext;
+    (void)bus_ok;
+    s_safety.estop_ok      = true;
+    s_safety.door_closed   = true;
+    s_safety.air_ok        = true;
+    s_safety.reset_pressed = false;
+#elif SAFETY_SOURCE == SAFETY_SRC_GPIO
+    (void)ext;
+    (void)bus_ok;
+    s_safety.estop_ok      = bsp_estop_ok();
+    s_safety.door_closed   = bsp_door_closed();
+    s_safety.air_ok        = bsp_air_ok();
+    s_safety.reset_pressed = bsp_safety_reset_pressed();
+#else
+    uint8_t v = bus_ok ? (uint8_t)(ext ^ SAFETY_EXT_INVERT_MASK) : 0U;  /* fail-safe */
+    s_safety.estop_ok      = ((v >> SAFETY_EXT_BIT_ESTOP) & 1U) != 0U;
+    s_safety.door_closed   = ((v >> SAFETY_EXT_BIT_DOOR) & 1U) != 0U;
+    s_safety.air_ok        = ((v >> SAFETY_EXT_BIT_AIR) & 1U) != 0U;
+    s_safety.reset_pressed = ((v >> SAFETY_EXT_BIT_RESET) & 1U) != 0U;
+#endif
+}
+
 void io_task(void *arg)
 {
     (void)arg;
@@ -113,10 +145,10 @@ void io_task(void *arg)
     for (;;) {
         /* ---- 1. Inputs ---- */
         uint32_t raw;
-        uint8_t extra;
-        bsp_dio_scan(&raw, &extra);
+        uint8_t ext, check;
+        bsp_dio_scan(&raw, &ext, &check);
 
-        if (extra == 0xFFU) {
+        if (check == 0xFFU) {
             if (bus_fault_cnt < DI_BUS_FAULT_SCANS) {
                 bus_fault_cnt++;
             }
@@ -130,12 +162,9 @@ void io_task(void *arg)
             alarm_raise(ALM_20_LI32_BUS_DISCONNECT);  /* keep last valid image */
         }
 
-        /* ---- 2. Safety chain (direct MCU inputs) ---- */
-        s_safety.estop_ok      = bsp_estop_ok();
-        s_safety.door_closed   = bsp_door_closed();
-        s_safety.air_ok        = bsp_air_ok();
-        s_safety.reset_pressed = bsp_safety_reset_pressed();
-        s_safety.di_bus_ok     = bus_ok;
+        /* ---- 2. Safety chain (source selected in app_config.h) ---- */
+        read_safety(ext, bus_ok);
+        s_safety.di_bus_ok = bus_ok;
 
         if (!s_safety.estop_ok) {
             bsp_km1_set(false);                      /* ALM_01: cut KM1 immediately */

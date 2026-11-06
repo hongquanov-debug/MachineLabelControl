@@ -57,4 +57,12 @@ void           machine_request_recipe_apply(void);
 /** M6 move to recipe height in progress (START is held off). */
 bool           machine_recipe_applying(void);
 
+/**
+ * Manual outputs (Modbus 40012) - only in MANUAL_JOG.
+ * Bit n = DO n for n = 0..14 (P1, P2, P3, P4, P5, P7, P8, M7, VAC_HEAD_1..6, VAC_BLOW).
+ * Returns false if refused (wrong state or interlock), the request is then ignored.
+ */
+#define MANUAL_DO_MASK 0x7FFFU
+bool           machine_manual_outputs(uint16_t mask);
+
 #endif /* MACHINE_H */

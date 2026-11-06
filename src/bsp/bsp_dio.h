@@ -15,14 +15,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "app_config.h"   /* DIO_DI_EXT_BYTES */
+
 #define DIO_DI_COUNT 32U
 #define DIO_DO_COUNT 24U
 
 /** @p initial_do = output image latched before /OE is enabled (safe state). */
 void bsp_dio_init(uint32_t initial_do);
 
-/** Shift in all inputs. @p raw = bytes 0..3 (bit index layout), @p extra = 5th byte. */
-void bsp_dio_scan(uint32_t *raw, uint8_t *extra);
+/**
+ * Shift in all inputs.
+ *  @p raw   = bytes 0..3 (LI32, bit index layout)
+ *  @p ext   = extension byte (safety on PCB v1), 0 if DIO_DI_EXT_BYTES == 0
+ *  @p check = byte after the last chip (SER tied low): 0x00 = OK, 0xFF = cable off
+ */
+void bsp_dio_scan(uint32_t *raw, uint8_t *ext, uint8_t *check);
 
 /** Update one output in the image (ISR safe). Takes effect at next commit. */
 void bsp_dio_do_write(uint8_t index, bool on);

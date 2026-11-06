@@ -113,7 +113,17 @@ bool bsp_door_closed(void)          { return HAL_GPIO_ReadPin(SAFE_DOOR_PORT, SA
 bool bsp_air_ok(void)               { return HAL_GPIO_ReadPin(SAFE_AIR_PORT, SAFE_AIR_PIN) == GPIO_PIN_SET; }
 bool bsp_safety_reset_pressed(void) { return HAL_GPIO_ReadPin(SAFE_RESET_PORT, SAFE_RESET_PIN) == GPIO_PIN_SET; }
 
-void bsp_km1_set(bool on)             { HAL_GPIO_WritePin(KM1_PORT, KM1_PIN, on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
+/* KM1 = contactor cấp nguồn động lực. Ở chế độ bàn thử (SAFETY_BENCH_MODE) chuỗi
+ * an toàn bị bỏ qua, nên KM1 bị KHÓA TẮT tại đây: không bao giờ có nguồn động lực. */
+void bsp_km1_set(bool on)
+{
+#if SAFETY_BENCH_MODE
+    (void)on;
+    HAL_GPIO_WritePin(KM1_PORT, KM1_PIN, GPIO_PIN_RESET);
+#else
+    HAL_GPIO_WritePin(KM1_PORT, KM1_PIN, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+#endif
+}
 void bsp_m6_brake_release(bool rel)   { HAL_GPIO_WritePin(M6_BRAKE_PORT, M6_BRAKE_PIN, rel ? GPIO_PIN_SET : GPIO_PIN_RESET); }
 void bsp_buzzer_set(bool on)          { HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, on ? GPIO_PIN_SET : GPIO_PIN_RESET); }
 void bsp_led_toggle(void)             { HAL_GPIO_TogglePin(LED_RUN_PORT, LED_RUN_PIN); }

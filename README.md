@@ -36,6 +36,10 @@ pio test -e native
   FPU Cortex-M4F được bật bởi `scripts/fpu.py` (builder `stm32cube` mặc định không bật FPU,
   khi đó FreeRTOS `port.c` báo lỗi `vstmdbeq ... not supported`). Sau khi đổi cờ build nên chạy
   `pio run -t clean` một lần.
+- `controller1_bench`: bản **chỉ để thử board trên bàn** – bỏ qua chuỗi an toàn nhưng khóa KM1
+  (không có nguồn động lực). Không nạp bản này lên máy thật.
+- Nguồn tín hiệu an toàn (PCB v1 qua LI mở rộng / PCB v2 qua GPIO): `SAFETY_SOURCE` trong
+  `include/app_config.h`, xem `docs/SPEC_NOTES.md` mục A20.
 - `native`: unit test trên máy tính cho thư viện lõi `lib/pmems_core` (Unity).
 
 ## 2. Cấu trúc dự án

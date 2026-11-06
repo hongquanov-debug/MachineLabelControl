@@ -43,7 +43,7 @@ class RecipeRegsTest(unittest.TestCase):
         regs[0], regs[1] = 4, 7
         regs[3], regs[4] = 0x0001, 0x0002      # fed = 0x00010002
         regs[18], regs[19] = 0, (1 << 7) | (1 << 6)
-        regs[22] = 0b101
+        regs[22] = 0b11101
         st = MachineStatus.from_regs(regs)
         self.assertEqual(st.state_name, "RUNNING")
         self.assertEqual(st.alarm_name, "LABEL_TAPE_EMPTY")
@@ -52,6 +52,8 @@ class RecipeRegsTest(unittest.TestCase):
         self.assertTrue(st.recipe_change_allowed)
         self.assertFalse(st.eeprom_ok)
         self.assertTrue(st.m6_moving)
+        self.assertTrue(st.safety_bench_mode)
+        self.assertTrue(st.safety_via_li_ext)
 
 
 if __name__ == "__main__":

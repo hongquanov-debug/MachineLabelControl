@@ -12,6 +12,9 @@
  *   5  40006 M4 overrun pulses (0..200)
  *   9  40010 (ext) jog axis 0..4 = M2..M6
  *  10  40011 (ext) jog direction -1/0/+1
+ *  11  40012 (ext) manual outputs, MANUAL_JOG only: bit n = DO n (0..14)
+ *         P1 P2 P3 P4 P5 P7 P8 M7 VAC1..VAC6 VAC_BLOW; read = actual DO 0..14.
+ *         Refused (exception 04) outside MANUAL_JOG or when P5 down is asked while M3 turns.
  *  20..40 40021..40041 recipe editor (PC configuration over Ethernet),
  *         see lib/pmems_core/include/recipe_regs.h
  *
@@ -22,7 +25,8 @@
  *  11  30012..13 DI bitmask                       13  30014..15 DO bitmask
  *  (ext) 15 VFD out freq x100, 16 VFD current x10, 17 cans on belt,
  *        18..19 active alarm bitmask, 20 vision CRC errors, 21 vision late results,
- *        22 config flags: bit0 recipe change allowed, bit1 EEPROM OK, bit2 M6 moving to recipe height
+ *        22 config flags: bit0 recipe change allowed, bit1 EEPROM OK, bit2 M6 moving to recipe height,
+ *           bit3 SAFETY BENCH MODE (safety chain ignored, KM1 locked off), bit4 safety via LI extension
  */
 #ifndef MODBUS_REGS_H
 #define MODBUS_REGS_H

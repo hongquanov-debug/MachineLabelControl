@@ -701,7 +701,8 @@ for (;;) {
     if (extra == 0xFF) đếm lỗi; 3 lần liên tiếp → ALM_20, giữ ảnh DI cũ
     else s_di = raw ^ DI_INVERT_MASK;
 
-    đọc E-Stop, cửa, khí, nút reset            // 2. chuỗi an toàn
+    read_safety(ext, bus_ok);                   // 2. chuỗi an toàn: GPIO (PCB v2), byte LI mở
+                                                //    rộng (PCB v1), hoặc bỏ qua (bản bàn thử)
     if (!estop_ok) { KM1 = 0; phanh M6; ALM_01 }   // phản ứng NGAY, không chờ FSM
     if (!door) ALM_02;   if (!air) ALM_03;
 
@@ -718,6 +719,10 @@ for (;;) {
 Các hàm tiện ích cho module khác: `di(DI_xxx)`, `do_set(DO_xxx, on)`, `do_commit_now()`
 (xuất ngay, cho trạm cần thời gian chính xác), `io_wait_di(bit, level, timeout)` (chờ cảm biến
 xi lanh, trả `false` khi quá thời gian).
+
+Nguồn tín hiệu an toàn chọn bằng `SAFETY_SOURCE` (`app_config.h`). Với PCB v1, 4 tín hiệu an toàn
+đi qua một IC 74HCT165 nối thêm vào cuối chuỗi (byte thứ 5); mất bus → tất cả bị coi là "không
+an toàn". Bản `controller1_bench` bỏ qua an toàn nhưng `bsp_km1_set()` luôn ghi 0 (khóa KM1).
 
 `ALM_14` (lỗi driver M6) được xử lý **ngay tại đây**: đóng phanh và cắt driver để trục nâng 15 kg
 không bị rơi.
@@ -966,6 +971,9 @@ Ba hàm callback cho `MbMap_t`:
 - `wr_holding(addr, val)`: kiểm tra phạm vi rồi gọi module tương ứng (`machine_post_cmd`,
   `recipe_select`, `params_mut()`…). Sai → mã ngoại lệ.
 - `rd_input(addr)`: **tính trực tiếp** từ trạng thái hiện tại (FSM, alarm, bộ đếm, DI/DO, biến tần…).
+
+**Xi lanh bằng tay (40012):** ghi → `machine_manual_outputs(mask)`; chỉ nhận ở MANUAL_JOG, có khóa
+liên động P5/M3. Task machine áp dụng ra ngõ ra (một nơi ghi duy nhất); thoát chạy tay → tắt hết.
 
 **Recipe editor (40021..40041):** có bộ đệm `s_rcp_buf` + mutex. PC ghi một lần FC16 cả dữ liệu
 lẫn lệnh (lệnh ở thanh ghi cuối nên được thực thi sau cùng); `rcp_execute()` chạy **đồng bộ** nên

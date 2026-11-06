@@ -80,19 +80,21 @@ void bsp_dio_init(uint32_t initial_do)
     bsp_dio_do_commit();    /* xuất trạng thái an toàn rồi mới bật /OE */
 }
 
-void bsp_dio_scan(uint32_t *raw, uint8_t *extra)
+void bsp_dio_scan(uint32_t *raw, uint8_t *ext, uint8_t *check)
 {
-    uint8_t bytes[5];
+    /* 4 byte LI32 + byte mở rộng (0 hoặc 1) + 1 byte kiểm tra */
+    enum { NBYTES = 4U + DIO_DI_EXT_BYTES + 1U };
+    uint8_t bytes[NBYTES];
 
-    /* Xung LOAD mức thấp: cả 4 IC chụp trạng thái 32 ngõ vào cùng một thời điểm */
+    /* Xung LOAD mức thấp: tất cả IC chụp trạng thái ngõ vào cùng một thời điểm */
     PIN_LO(DI_LOAD_PORT, DI_LOAD_PIN);
     short_delay();
     PIN_HI(DI_LOAD_PORT, DI_LOAD_PIN);
     short_delay();
 
-    /* Đọc 5 byte = 40 bit. 4 byte đầu là 32 ngõ vào; byte thứ 5 là chân SER
-     * của IC cuối chuỗi (nối GND trên module -> luôn đọc 0x00 khi cáp tốt). */
-    for (unsigned b = 0; b < 5U; b++) {
+    /* Byte cuối cùng là chân SER của IC cuối chuỗi (nối GND trên module)
+     * -> luôn đọc 0x00 khi cáp tốt; tuột cáp thì chân DATA lơ lửng -> 0xFF. */
+    for (unsigned b = 0; b < (unsigned)NBYTES; b++) {
         uint8_t v = 0;
         for (int bit = 7; bit >= 0; bit--) {   /* bit cao (D7/QH) ra trước */
             if (PIN_RD(DI_DATA_PORT, DI_DATA_PIN)) {
@@ -109,7 +111,8 @@ void bsp_dio_scan(uint32_t *raw, uint8_t *extra)
      * => chỉ số bit = byte * 8 + bit, khớp với bảng Mục 5.1 của spec. */
     *raw = (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[2] << 16) |
            ((uint32_t)bytes[3] << 24);
-    *extra = bytes[4];
+    *ext   = (DIO_DI_EXT_BYTES > 0U) ? bytes[4] : 0U;
+    *check = bytes[NBYTES - 1U];
 }
 
 /** Đổi 1 bit trong ảnh ngõ ra (chưa xuất ra chân). An toàn khi gọi từ ngắt. */
