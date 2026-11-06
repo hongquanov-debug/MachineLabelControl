@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1024, height=768">
+<title>PMeMS Controller 1 – Giao diện PC</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!--
+  Mockup giao diện phần mềm PC (Python + PyQt6) cho dây chuyền chỉnh góc & dán tem.
+  Khung cố định 1024 x 768. Dữ liệu trong bản mẫu là GIẢ LẬP (app.js).
+  Ánh xạ sang PyQt6 & thanh ghi Modbus: xem README.md cùng thư mục.
+
+  Bố cục (QMainWindow):
+    header  : QWidget ngang  - trạng thái máy, recipe, tốc độ, kết nối, đồng hồ
+    nav     : QButtonGroup   - 6 nút chuyển trang
+    main    : QStackedWidget - 6 trang <section class="page">
+    footer  : QStatusBar     - alarm đang hoạt động
+-->
+<div class="app" id="app">
+
+  <!-- ============================== HEADER ============================== -->
+  <header class="header">
+    <div class="brand"><b>PMeMS</b><span>Controller 1</span></div>
+    <div class="state-pill ready" id="hdr-state">READY</div>
+    <div class="hdr-item"><small>Recipe</small><b id="hdr-recipe">1 · CAN_330ML_STD</b></div>
+    <div class="hdr-item"><small>Tốc độ</small><b><span id="hdr-speed">0</span> lon/ph</b></div>
+    <div class="hdr-spacer"></div>
+    <div class="links">
+      <span class="link"><i class="dot ok" id="lnk-plc"></i>PLC</span>
+      <span class="link"><i class="dot ok" id="lnk-cam"></i>Camera</span>
+      <span class="link"><i class="dot ok" id="lnk-485"></i>RS485</span>
+    </div>
+    <button class="user-btn" id="btn-user">👤 Vận hành ▾</button>
+    <div class="clock"><span id="clock-time">--:--:--</span><small id="clock-date">--/--/----</small></div>
+  </header>
+
+  <!-- ============================== MENU ================================ -->
+  <nav class="nav" id="nav">
+    <button data-page="dashboard" class="active">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      Tổng quan</button>
+    <button data-page="camera">
+      <svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Camera</button>
+    <button data-page="monitor">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      Giám sát</button>
+    <button data-page="config">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Cấu hình</button>
+    <button data-page="report">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      Báo cáo</button>
+    <button data-page="log">
+      <svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg>
+      Nhật ký<span class="badge" id="nav-badge">0</span></button>
+  </nav>
+
+  <!-- ============================== MAIN ================================ -->
+  <main class="main">
+
+    <!-- ===================== 1. TỔNG QUAN ===================== -->
+    <section class="page active" id="page-dashboard">
+      <!-- Bảng điều khiển: gửi lệnh 40001 -->
+      <div class="card ctrl">
+        <h3>Điều khiển máy</h3>
+        <div class="btns">
+          <button class="btn big ok" data-cmd="start">▶ START<small>Chạy / Tiếp tục</small></button>
+          <button class="btn big warn" data-cmd="pause">❚❚ PAUSE<small>Tạm dừng</small></button>
+          <button class="btn big err" data-cmd="stop">■ STOP<small>Dừng có kiểm soát</small></button>
+          <button class="btn big" data-cmd="reset">↺ RESET<small>Xóa alarm</small></button>
+          <button class="btn big span2 primary" data-cmd="home">⌂ HOMING<small>Về gốc toàn máy &amp; xả băng tải</small></button>
+        </div>
+        <div class="speed-box">
+          <span class="muted" style="flex:1">Tốc độ đặt<br><small>lon/phút (60–156)</small></span>
+          <button class="btn sm" data-speed="-5">−5</button>
+          <b id="dash-speed-set">120</b>
+          <button class="btn sm" data-speed="5">+5</button>
+        </div>
+        <div class="speed-box">
+          <span class="muted" style="flex:1">Offset góc<br><small>độ (−18 … +18)</small></span>
+          <button class="btn sm" data-offset="-0.5">−</button>
+          <b id="dash-offset">0.0</b>
+          <button class="btn sm" data-offset="0.5">+</button>
+        </div>
+      </div>
+
+      <!-- KPI ca làm việc: 30003..30009 -->
+      <div class="kpis">
+        <div class="kpi"><small>Tốc độ thực</small><b id="k-speed">0</b><span>lon/phút</span></div>
+        <div class="kpi"><small>Tổng lon</small><b id="k-fed">0</b><span>đã nạp ca này</span></div>
+        <div class="kpi"><small>Đạt (OK)</small><b class="ok-t" id="k-ok">0</b><span>dán tem đạt</span></div>
+        <div class="kpi"><small>Lỗi (NG)</small><b class="err-t" id="k-ng">0</b><span>bị loại P8</span></div>
+        <div class="kpi wide"><small>Tỉ lệ đạt</small><b id="k-yield">–</b><div class="bar"><i id="k-yield-bar" style="width:0"></i></div></div>
+        <div class="kpi"><small>Trên băng tải</small><b id="k-belt">0</b><span>lon đang theo dõi</span></div>
+        <div class="kpi"><small>Thời gian chạy</small><b id="k-runtime">00:00</b><span>giờ:phút</span></div>
+      </div>
+
+      <!-- Sơ đồ băng tải: vẽ bằng SVG, chấm tròn = lon (màu theo trạng thái) -->
+      <div class="card conveyor">
+        <h3>Băng tải <span class="right legend">
+          <span><i style="background:var(--info)"></i>Chờ Vision</span>
+          <span><i style="background:var(--accent)"></i>Đã nhận góc</span>
+          <span><i style="background:var(--ok)"></i>Đã dán tem</span>
+          <span><i style="background:var(--err)"></i>Lỗi → loại</span></span></h3>
+        <div class="grow"><svg id="conveyor-svg" viewBox="0 0 620 140" preserveAspectRatio="xMidYMid meet"></svg></div>
+      </div>
+
+      <div class="dash-bottom">
+        <div class="card">
+          <h3>Camera <span class="right mono" id="mini-cam-info">–</span></h3>
+          <div class="mini-cam"><canvas id="mini-cam" width="268" height="150"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Lon gần nhất</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>ID</th><th class="num">Góc θ</th><th>Vision</th><th>Kết quả</th></tr></thead>
+            <tbody id="dash-recent"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h3>Alarm đang hoạt động <span class="right" id="dash-alarm-count">0</span></h3>
+          <div class="alarm-list grow" id="dash-alarms"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 2. CAMERA ===================== -->
+    <section class="page" id="page-camera">
+      <div class="card">
+        <h3>Hình ảnh trực tiếp
+          <span class="right row">
+            <span class="seg" id="cam-mode"><button class="active" data-v="live">Trực tiếp</button><button data-v="last">Ảnh cuối</button><button data-v="ng">Ảnh lỗi</button></span>
+          </span></h3>
+        <div class="cam-view">
+          <canvas id="cam-canvas" width="620" height="465"></canvas>
+          <div class="cam-osd" id="cam-osd">CAN #–<br>θ = –</div>
+          <div class="cam-osd right" id="cam-osd-r">EXP 120 µs<br>– ms</div>
+        </div>
+      </div>
+
+      <div class="cam-side">
+        <div class="card">
+          <h3>Kết quả nhận diện</h3>
+          <div class="result-big"><b id="cam-theta">–</b><span class="tag ok" id="cam-q">–</span></div>
+          <div class="stat-grid" style="margin-top:8px">
+            <div class="stat"><small>Thời gian xử lý</small><b id="cam-proc">– ms</b></div>
+            <div class="stat"><small>Trung bình</small><b id="cam-avg">– ms</b></div>
+            <div class="stat"><small>Ảnh OK</small><b class="ok-t" id="cam-ok">0</b></div>
+            <div class="stat"><small>Ảnh NG</small><b class="err-t" id="cam-ng">0</b></div>
+            <div class="stat"><small>Timeout (&gt;80 ms)</small><b class="warn-t" id="cam-tmo">0</b></div>
+            <div class="stat"><small>Lỗi CRC RS485</small><b id="cam-crc">0</b></div>
+          </div>
+        </div>
+        <div class="card grow">
+          <h3>Thông số chụp</h3>
+          <div class="slider"><div class="row"><span>Phơi sáng</span><span id="v-exp">120 µs</span></div><input type="range" min="20" max="500" value="120" data-out="v-exp" data-unit=" µs"></div>
+          <div class="slider"><div class="row"><span>Gain</span><span id="v-gain">4 dB</span></div><input type="range" min="0" max="24" value="4" data-out="v-gain" data-unit=" dB"></div>
+          <div class="slider"><div class="row"><span>Ngưỡng nhận diện khoen</span><span id="v-thr">0.72</span></div><input type="range" min="40" max="95" value="72" data-out="v-thr" data-scale="0.01"></div>
+          <div class="cam-btns">
+            <button class="btn sm">Chụp thử</button>
+            <button class="btn sm">Lưu ảnh</button>
+            <button class="btn sm">Vùng ROI</button>
+            <button class="btn sm primary">Áp dụng</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Lịch sử nhận diện <span class="right muted">gói 0x20 nhận từ phần xử lý ảnh → gửi về MCU qua RS485_3</span></h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Giờ</th><th>CAN_ID</th><th class="num">θ (°)</th><th class="num">θ×100</th><th>QUALITY_FLAG</th><th class="num">Xử lý</th><th>Ghi chú</th></tr></thead>
+          <tbody id="cam-history"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- ===================== 3. GIÁM SÁT ===================== -->
+    <section class="page" id="page-monitor">
+      <div class="tabs" data-tabs="mon">
+        <button class="active" data-sub="mon-stations">Trạm &amp; trục</button>
+        <button data-sub="mon-io">Ngõ vào / ra</button>
+        <button data-sub="mon-jog">Chạy tay</button>
+      </div>
+
+      <div class="subpage active" id="mon-stations">
+        <div class="card station"><h3>Cấp lon P1/P2</h3><div class="st-state ok-t" id="st-feed">Đang cấp</div>
+          <div class="kv">Hàng chờ S0<b id="st-s0">Có lon</b></div><div class="kv">Nhịp nhả<b>120 mm</b></div><div class="kv">Lần nhả<b id="st-rel">0</b></div></div>
+        <div class="card station"><h3>Chỉnh góc P3/P4/M2</h3><div class="st-state" id="st-orient">Chờ lon</div>
+          <div class="kv">Lon<b id="st-or-id">–</b></div><div class="kv">Góc M2<b id="st-or-deg">–</b></div><div class="kv">Chu kỳ<b id="st-or-ms">– ms</b></div></div>
+        <div class="card station"><h3>Dán tem M3/P5</h3><div class="st-state" id="st-label">Chờ lon</div>
+          <div class="kv">Đầu hút ở 180°<b id="st-head">#1</b></div><div class="kv">Chân không<b id="st-vac">OK</b></div><div class="kv">Chu kỳ<b id="st-lb-ms">– ms</b></div></div>
+        <div class="card station"><h3>Kiểm tra S5</h3><div class="st-state" id="st-insp">Chờ lon</div>
+          <div class="kv">Có tem<b id="st-insp-ok">0</b></div><div class="kv">Mất tem<b id="st-insp-ng">0</b></div><div class="kv">Vị trí<b>950 mm</b></div></div>
+        <div class="card station"><h3>Loại lỗi P8</h3><div class="st-state" id="st-rej">Sẵn sàng</div>
+          <div class="kv">Đã loại<b id="st-rej-n">0</b></div><div class="kv">Xi lanh<b id="st-p8">Về</b></div><div class="kv">Vị trí<b>1250 mm</b></div></div>
+
+        <div class="mon-lower">
+          <div class="card">
+            <h3>Trục động cơ</h3>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Trục</th><th>Chức năng</th><th class="num">Vị trí</th><th class="num">Tốc độ</th><th>Home</th><th>Driver</th><th>Trạng thái</th></tr></thead>
+              <tbody id="axis-table"></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <h3>An toàn &amp; tiện ích</h3>
+            <div class="safety" id="safety"></div>
+            <h3 style="margin-top:12px">Biến tần băng tải M1</h3>
+            <div class="stat-grid">
+              <div class="stat"><small>Tần số ra</small><b id="vfd-hz">0.00 Hz</b></div>
+              <div class="stat"><small>Dòng điện</small><b id="vfd-a">0.0 A</b></div>
+              <div class="stat"><small>Mã lỗi</small><b id="vfd-err">0</b></div>
+              <div class="stat"><small>Truyền thông</small><b class="ok-t" id="vfd-com">Online</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subpage" id="mon-io">
+        <div class="card"><h3>32 ngõ vào – Module LI32 <span class="right mono muted">30012–30013</span></h3><div class="io-grid" id="di-grid"></div></div>
+        <div class="card"><h3>24 ngõ ra – Module LO24 <span class="right mono muted">30014–30015</span></h3><div class="io-grid" id="do-grid"></div></div>
+      </div>
+
+      <div class="subpage" id="mon-jog">
+        <div class="card">
+          <h3>Chọn trục</h3>
+          <div class="axis-pick" id="jog-axis">
+            <button class="btn active" data-ax="0">M2</button><button class="btn" data-ax="1">M3</button><button class="btn" data-ax="2">M4</button><button class="btn" data-ax="3">M5</button><button class="btn" data-ax="4">M6</button>
+          </div>
+          <div class="stat-grid" style="margin-top:10px">
+            <div class="stat"><small>Vị trí hiện tại</small><b id="jog-pos">0.00</b></div>
+            <div class="stat"><small>Giới hạn mềm</small><b id="jog-lim">±180°</b></div>
+          </div>
+          <div class="jog-pad">
+            <button class="btn" id="jog-neg">◀ −</button>
+            <button class="btn" id="jog-pos-btn">+ ▶</button>
+          </div>
+          <p class="muted" style="font-size:11px; margin:10px 0 0">Nhấn giữ để chạy (40011 = ±1), thả ra để dừng (40011 = 0). Chỉ hoạt động ở chế độ MANUAL_JOG.</p>
+          <div class="row" style="margin-top:auto"><button class="btn primary" style="flex:1" id="jog-enter">Vào chế độ chạy tay</button></div>
+        </div>
+        <div class="card">
+          <h3>Xi lanh khí nén <span class="right muted">nhấn để đảo trạng thái (chỉ ở MANUAL_JOG)</span></h3>
+          <div class="cyl-grid" id="cyl-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 4. CẤU HÌNH ===================== -->
+    <section class="page" id="page-config">
+      <div class="tabs" data-tabs="cfg">
+        <button class="active" data-sub="cfg-recipe">Recipe sản phẩm</button>
+        <button data-sub="cfg-vision">Xử lý ảnh</button>
+        <button data-sub="cfg-conn">Kết nối</button>
+        <button data-sub="cfg-system">Hệ thống</button>
+      </div>
+
+      <div class="subpage active" id="cfg-recipe">
+        <div class="card">
+          <h3>Danh sách (1–16)</h3>
+          <div class="recipe-list grow" id="recipe-list"></div>
+        </div>
+        <div class="card">
+          <h3>Recipe <span id="rcp-title" class="mono" style="color:var(--text)">#1</span>
+            <span class="right"><span class="tag ok" id="rcp-active-tag">ĐANG DÙNG</span></span></h3>
+          <div class="form-grid grow" id="recipe-form">
+            <div class="form-sec">Sản phẩm</div>
+            <div class="field full"><label>Tên sản phẩm (tối đa 15 ký tự)</label><div class="inp"><input data-k="name" maxlength="15"></div></div>
+            <div class="field"><label>Đường kính lon</label><div class="inp"><input type="number" step="0.1" data-k="diameter" data-min="30" data-max="120"><span class="unit">mm</span></div><span class="hint">30 – 120</span></div>
+            <div class="field"><label>Chiều cao lon</label><div class="inp"><input type="number" step="0.1" data-k="height" data-min="50" data-max="250"><span class="unit">mm</span></div><span class="hint">50 – 250</span></div>
+            <div class="field ro"><label>Hệ số M2 (tự tính = D / 95)</label><div class="inp"><input data-k="scale" readonly><span class="unit">×1000</span></div><span class="hint">bộ điều khiển tự tính</span></div>
+            <div class="form-sec">Định vị</div>
+            <div class="field"><label>Góc lệch khoen – tâm tem</label><div class="inp"><input type="number" step="0.01" data-k="tab" data-min="-180" data-max="180"><span class="unit">°</span></div><span class="hint">−180 – +180</span></div>
+            <div class="field"><label>Chiều cao trục nâng M6</label><div class="inp"><input type="number" step="0.1" data-k="m6" data-min="0" data-max="98"><span class="unit">mm</span></div><span class="hint">0 – 98</span></div>
+            <div class="field"><label>Tốc độ thiết kế</label><div class="inp"><input type="number" data-k="speed" data-min="60" data-max="156"><span class="unit">lon/ph</span></div><span class="hint">60 – 156</span></div>
+            <div class="form-sec">Dán tem</div>
+            <div class="field"><label>Thời gian ép P5</label><div class="inp"><input type="number" data-k="press" data-min="20" data-max="100"><span class="unit">ms</span></div><span class="hint">20 – 100</span></div>
+            <div class="field"><label>Trễ kiểm tra chân không</label><div class="inp"><input type="number" data-k="vac" data-min="0" data-max="200"><span class="unit">ms</span></div><span class="hint">0 – 200</span></div>
+            <div class="field"><label>Thời gian thổi nhả tem</label><div class="inp"><input type="number" data-k="blow" data-min="0" data-max="100"><span class="unit">ms</span></div><span class="hint">0 – 100</span></div>
+            <div class="field"><label>Xung chạy thêm M4</label><div class="inp"><input type="number" data-k="overrun" data-min="0" data-max="200"><span class="unit">xung</span></div><span class="hint">0 – 200</span></div>
+          </div>
+          <div class="form-actions">
+            <button class="btn sm" id="rcp-reload">Đọc lại</button>
+            <button class="btn sm" id="rcp-default">Mặc định</button>
+            <span class="dirty" id="rcp-dirty">● Có thay đổi chưa lưu</span>
+            <span style="flex:1"></span>
+            <button class="btn" id="rcp-save">Lưu</button>
+            <button class="btn primary" id="rcp-activate">Lưu &amp; dùng ngay</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="subpage" id="cfg-vision">
+        <div class="card"><h3>Camera Hikrobot</h3><div class="cfg-form">
+          <div class="field"><label>Camera</label><div class="inp"><select><option>MV-CS050-10GM (192.168.2.10)</option></select></div></div>
+          <div class="field"><label>Chế độ kích</label><div class="inp"><select><option>Phần cứng (CAM_TRIG PD14)</option><option>Phần mềm</option></select></div></div>
+          <div class="field"><label>Phơi sáng</label><div class="inp"><input type="number" value="120"><span class="unit">µs</span></div></div>
+          <div class="field"><label>Gain</label><div class="inp"><input type="number" value="4"><span class="unit">dB</span></div></div>
+          <div class="field"><label>Độ phân giải</label><div class="inp"><select><option>1280 × 960</option><option>640 × 480</option></select></div></div>
+          <div class="field"><label>Lưu ảnh lỗi</label><div class="inp"><select><option>Bật – giữ 7 ngày</option><option>Tắt</option></select></div></div>
+        </div></div>
+        <div class="card"><h3>Thuật toán nhận diện khoen</h3><div class="cfg-form">
+          <div class="field"><label>Mô hình</label><div class="inp"><select><option>tab_detect_v3.onnx</option></select></div></div>
+          <div class="field"><label>Ngưỡng tin cậy</label><div class="inp"><input type="number" step="0.01" value="0.72"></div></div>
+          <div class="field"><label>Bán kính nắp (px)</label><div class="inp"><input type="number" value="210"></div></div>
+          <div class="field"><label>Bù góc camera</label><div class="inp"><input type="number" step="0.01" value="0.00"><span class="unit">°</span></div></div>
+          <div class="field"><label>Thời gian tối đa</label><div class="inp"><input type="number" value="60"><span class="unit">ms</span></div><span class="hint">MCU timeout = 80 ms</span></div>
+          <div class="field"><label>Lớp NG</label><div class="inp"><select><option>NO_TAB, DEFECT, WRONG_TYPE</option></select></div></div>
+        </div></div>
+      </div>
+
+      <div class="subpage" id="cfg-conn">
+        <div class="card"><h3>Ethernet – Modbus TCP (cấu hình &amp; giám sát)</h3><div class="cfg-form">
+          <div class="field"><label>IP bộ điều khiển</label><div class="inp"><input value="192.168.1.200"></div></div>
+          <div class="field"><label>Cổng</label><div class="inp"><input type="number" value="502"></div></div>
+          <div class="field"><label>Chu kỳ đọc trạng thái</label><div class="inp"><input type="number" value="250"><span class="unit">ms</span></div></div>
+          <div class="field"><label>Timeout</label><div class="inp"><input type="number" value="2000"><span class="unit">ms</span></div></div>
+          <div class="field full" style="grid-column:1/3"><button class="btn sm">Kiểm tra kết nối</button></div>
+        </div></div>
+        <div class="card"><h3>RS485_3 – Kết quả Vision</h3><div class="cfg-form">
+          <div class="field"><label>Cổng COM</label><div class="inp"><select><option>COM3 (USB-RS485)</option><option>COM4</option></select></div></div>
+          <div class="field"><label>Baud rate</label><div class="inp"><select><option>115200</option></select></div><span class="hint">8N1 – cố định theo spec</span></div>
+          <div class="field"><label>Gói trigger 0x10</label><div class="inp"><select><option>Có – chờ mã lon từ MCU</option><option>Không – chỉ dùng CAM_TRIG</option></select></div></div>
+          <div class="field"><label>Byte CRC</label><div class="inp"><select><option>Byte thấp trước (Modbus)</option></select></div></div>
+        </div></div>
+      </div>
+
+      <div class="subpage" id="cfg-system">
+        <div class="card"><h3>Người dùng &amp; phân quyền</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Tài khoản</th><th>Quyền</th><th>Được phép</th></tr></thead>
+            <tbody>
+              <tr><td>van_hanh</td><td><span class="tag muted">Vận hành</span></td><td>Start/Stop, xem</td></tr>
+              <tr><td>ky_thuat</td><td><span class="tag info">Kỹ thuật</span></td><td>+ Recipe, chạy tay</td></tr>
+              <tr><td>admin</td><td><span class="tag warn">Quản trị</span></td><td>+ Kết nối, người dùng</td></tr>
+            </tbody></table></div>
+        </div>
+        <div class="card"><h3>Chung</h3><div class="cfg-form">
+          <div class="field"><label>Ngôn ngữ</label><div class="inp"><select><option>Tiếng Việt</option><option>English</option></select></div></div>
+          <div class="field"><label>Ca làm việc</label><div class="inp"><select><option>3 ca: 06–14–22</option><option>2 ca: 07–19</option></select></div></div>
+          <div class="field"><label>Thư mục dữ liệu</label><div class="inp"><input value="D:\PMeMS\data"></div></div>
+          <div class="field"><label>Giữ nhật ký</label><div class="inp"><input type="number" value="90"><span class="unit">ngày</span></div></div>
+          <div class="field"><label>Tự đăng xuất</label><div class="inp"><input type="number" value="10"><span class="unit">phút</span></div></div>
+          <div class="field"><label>Phiên bản</label><div class="inp"><input value="PC 0.1.0 · FW 3.2.0" readonly></div></div>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- ===================== 5. BÁO CÁO ===================== -->
+    <section class="page" id="page-report">
+      <div class="toolbar">
+        <div class="field"><label>Từ ngày</label><div class="inp"><input type="date" id="rp-from"></div></div>
+        <div class="field"><label>Đến ngày</label><div class="inp"><input type="date" id="rp-to"></div></div>
+        <div class="field"><label>Ca</label><div class="inp"><select><option>Tất cả</option><option>Ca 1 (06–14)</option><option>Ca 2 (14–22)</option><option>Ca 3 (22–06)</option></select></div></div>
+        <div class="field"><label>Recipe</label><div class="inp"><select><option>Tất cả</option><option>1 · CAN_330ML_STD</option></select></div></div>
+        <button class="btn primary">Xem</button>
+        <span style="flex:1"></span>
+        <button class="btn">Xuất Excel</button>
+        <button class="btn">In / PDF</button>
+      </div>
+      <div class="report-kpis">
+        <div class="kpi"><small>Tổng lon</small><b id="rp-total">–</b></div>
+        <div class="kpi"><small>Đạt</small><b class="ok-t" id="rp-ok">–</b></div>
+        <div class="kpi"><small>Lỗi</small><b class="err-t" id="rp-ng">–</b></div>
+        <div class="kpi"><small>Tỉ lệ đạt</small><b id="rp-yield">–</b></div>
+        <div class="kpi"><small>Thời gian chạy</small><b id="rp-run">–</b></div>
+        <div class="kpi"><small>Số lần dừng</small><b class="warn-t" id="rp-stops">–</b></div>
+      </div>
+      <div class="card chart">
+        <h3>Sản lượng theo giờ <span class="right legend"><span><i style="background:var(--ok)"></i>Đạt</span><span><i style="background:var(--err)"></i>Lỗi</span></span></h3>
+        <div class="grow"><svg id="rp-chart" viewBox="0 0 600 300" preserveAspectRatio="none"></svg></div>
+      </div>
+      <div class="card">
+        <h3>Nguyên nhân lỗi</h3>
+        <div class="ng-bars" id="rp-ng-bars"></div>
+        <h3 style="margin-top:14px">Dừng máy</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Mã</th><th>Nội dung</th><th class="num">Lần</th></tr></thead>
+          <tbody id="rp-stop-table"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== 6. NHẬT KÝ ===================== -->
+    <section class="page" id="page-log">
+      <div class="log-tools">
+        <span class="seg" id="log-filter">
+          <button class="active" data-v="all">Tất cả</button><button data-v="alarm">Alarm</button><button data-v="event">Sự kiện</button><button data-v="vision">Vision</button><button data-v="comm">Truyền thông</button>
+        </span>
+        <div class="field"><div class="inp"><input placeholder="Tìm kiếm nội dung, mã alarm…" id="log-search"></div></div>
+        <span style="flex:1"></span>
+        <button class="btn sm" id="log-pause">Tạm dừng cuộn</button>
+        <button class="btn sm">Xuất CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:150px">Thời gian</th><th style="width:80px">Mức</th><th style="width:100px">Nguồn</th><th style="width:70px">Mã</th><th>Nội dung</th></tr></thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+      <div class="log-foot">
+        <span>Hiển thị: <b id="log-count">0</b> dòng</span>
+        <span><span class="tag err">Lỗi</span> <b id="log-n-err">0</b></span>
+        <span><span class="tag warn">Cảnh báo</span> <b id="log-n-warn">0</b></span>
+        <span><span class="tag info">Thông tin</span> <b id="log-n-info">0</b></span>
+        <span style="flex:1"></span>
+        <button class="btn sm" id="log-ack">Xác nhận tất cả alarm</button>
+      </div>
+    </section>
+
+    <!-- Hộp thoại xác nhận dùng chung (QMessageBox) -->
+    <div class="modal-bg" id="modal">
+      <div class="modal">
+        <h2 id="modal-title">Xác nhận</h2>
+        <p id="modal-text">…</p>
+        <div class="row"><button class="btn" id="modal-no">Hủy</button><button class="btn primary" id="modal-yes">Đồng ý</button></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================== FOOTER ============================== -->
+  <footer class="footer" id="footer">
+    <span class="dot" id="ftr-dot"></span>
+    <span class="alarm-text" id="ftr-alarm">Không có alarm</span>
+    <span class="ver">Modbus TCP 192.168.1.200:502 · COM3 115200</span>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
