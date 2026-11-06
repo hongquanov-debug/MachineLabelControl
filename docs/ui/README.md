@@ -63,7 +63,7 @@ và module xử lý ảnh của bạn.
 
 Nút chọn trên khung ảnh: **Camera 1 · Góc lệch** / **Camera 2 · DataMatrix** (`QButtonGroup`
 đổi trang của một `QStackedWidget` nhỏ ở cột phải và bảng lịch sử). Giao thức của cả hai camera:
-[`docs/VISION_PROTOCOL.md`](../VISION_PROTOCOL.md); thư viện Python `pmems_config.vision_link`.
+[`docs/VISION_PROTOCOL.md`](../VISION_PROTOCOL.md). Ảnh và kết quả lấy từ project xử lý ảnh của bạn.
 
 **Camera 1** (gói `0x10` / `0x20`):
 
