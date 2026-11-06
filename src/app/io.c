@@ -30,6 +30,7 @@ static volatile SafetyStatus_t s_safety;
 static volatile bool s_drives_powered;
 static volatile uint32_t s_heartbeat;
 static uint32_t s_powered_since;
+static volatile uint8_t s_ext_raw;
 
 void io_init(void)
 {
@@ -85,6 +86,7 @@ void io_set_drives_powered(bool powered)
 }
 
 uint32_t io_heartbeat(void) { return s_heartbeat; }
+uint8_t io_safety_ext_raw(void) { return s_ext_raw; }
 
 static void check_driver_alarms(uint32_t img)
 {
@@ -147,6 +149,7 @@ void io_task(void *arg)
         uint32_t raw;
         uint8_t ext, check;
         bsp_dio_scan(&raw, &ext, &check);
+        s_ext_raw = ext;
 
         if (check == 0xFFU) {
             if (bus_fault_cnt < DI_BUS_FAULT_SCANS) {

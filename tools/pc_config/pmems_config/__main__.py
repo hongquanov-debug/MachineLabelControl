@@ -72,6 +72,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Toc do     : {st.speed_cans_min} lon/phut, tren bang tai: {st.cans_on_belt}")
                 print(f"San luong  : nap {st.fed}, OK {st.ok}, NG {st.ng}")
                 print(f"Recipe     : {plc.active_recipe_id()} (doi duoc: {st.recipe_change_allowed})")
+                on = lambda b: "OK" if b else "--"
+                print(f"An toan    : E-Stop {on(st.estop_ok)}  Cua {on(st.door_closed)}  Khi {on(st.air_ok_sw)}  "
+                      f"Reset {'NHAN' if st.reset_pressed else '-'}  Bus {on(st.io_bus_ok)}  "
+                      f"LI ext raw = 0x{st.safety_ext_raw:02X}"
+                      + ("   [CHE DO BAN THU - KM1 KHOA]" if st.safety_bench_mode else ""))
             elif a.action == "recipe-list":
                 active = plc.active_recipe_id()
                 for r in plc.list_recipes():

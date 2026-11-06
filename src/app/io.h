@@ -39,6 +39,9 @@ SafetyStatus_t io_safety(void);
 /** Set by the FSM: driver alarm inputs are evaluated only while drives are powered. */
 void io_set_drives_powered(bool powered);
 
+/** Raw safety extension byte from the last scan (PCB v1 commissioning, 30024 high byte). */
+uint8_t io_safety_ext_raw(void);
+
 /** Heartbeat counter incremented by the I/O task (watchdog supervision). */
 uint32_t io_heartbeat(void);
 

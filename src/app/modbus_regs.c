@@ -225,6 +225,13 @@ static uint8_t rd_input(void *ctx, uint16_t a, uint16_t *v)
     case 19: *v = (uint16_t)am; break;
     case 20: *v = (uint16_t)vis.crc_errors; break;
     case 21: *v = (uint16_t)vis.rx_late; break;
+    case 23: {   /* safety diagnostics for wiring check */
+        SafetyStatus_t sf = io_safety();
+        *v = (uint16_t)((sf.estop_ok ? 1U : 0U) | (sf.door_closed ? 2U : 0U) | (sf.air_ok ? 4U : 0U) |
+                        (sf.reset_pressed ? 8U : 0U) | (sf.di_bus_ok ? 16U : 0U) |
+                        ((uint16_t)io_safety_ext_raw() << 8));
+        break;
+    }
     case 22: *v = (uint16_t)((machine_recipe_change_allowed() ? 1U : 0U) | (recipe_eeprom_ok() ? 2U : 0U) |
                              (machine_recipe_applying() ? 4U : 0U) | (SAFETY_BENCH_MODE ? 8U : 0U) |
                              (SAFETY_SOURCE == SAFETY_SRC_LI_EXT ? 16U : 0U));

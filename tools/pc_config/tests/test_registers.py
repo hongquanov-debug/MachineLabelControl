@@ -39,11 +39,12 @@ class RecipeRegsTest(unittest.TestCase):
         self.assertEqual(len(bad.validate()), 4)
 
     def test_status_decode(self):
-        regs = [0] * 23
+        regs = [0] * 24
         regs[0], regs[1] = 4, 7
         regs[3], regs[4] = 0x0001, 0x0002      # fed = 0x00010002
         regs[18], regs[19] = 0, (1 << 7) | (1 << 6)
         regs[22] = 0b11101
+        regs[23] = (0x0B << 8) | 0b10011    # E-Stop OK, door OK, air low, no reset, bus OK
         st = MachineStatus.from_regs(regs)
         self.assertEqual(st.state_name, "RUNNING")
         self.assertEqual(st.alarm_name, "LABEL_TAPE_EMPTY")
@@ -54,6 +55,9 @@ class RecipeRegsTest(unittest.TestCase):
         self.assertTrue(st.m6_moving)
         self.assertTrue(st.safety_bench_mode)
         self.assertTrue(st.safety_via_li_ext)
+        self.assertTrue(st.estop_ok and st.door_closed and st.io_bus_ok)
+        self.assertFalse(st.air_ok_sw or st.reset_pressed)
+        self.assertEqual(st.safety_ext_raw, 0x0B)
 
 
 if __name__ == "__main__":

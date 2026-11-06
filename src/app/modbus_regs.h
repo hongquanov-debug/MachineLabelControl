@@ -27,6 +27,8 @@
  *        18..19 active alarm bitmask, 20 vision CRC errors, 21 vision late results,
  *        22 config flags: bit0 recipe change allowed, bit1 EEPROM OK, bit2 M6 moving to recipe height,
  *           bit3 SAFETY BENCH MODE (safety chain ignored, KM1 locked off), bit4 safety via LI extension
+ *        23 (30024) safety diagnostics: bit0 E-Stop released, bit1 door closed, bit2 air OK,
+ *           bit3 reset pressed, bit4 I/O bus OK; high byte = raw LI extension byte (wiring check)
  */
 #ifndef MODBUS_REGS_H
 #define MODBUS_REGS_H

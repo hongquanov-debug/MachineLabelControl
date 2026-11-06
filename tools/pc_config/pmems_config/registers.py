@@ -39,7 +39,7 @@ _O_ID, _O_NAME, _O_DIA, _O_H, _O_TAB, _O_M6, _O_SCALE = 0, 1, 9, 10, 11, 12, 13
 _O_SPEED, _O_OVERRUN, _O_DWELL, _O_VAC, _O_BLOW = 14, 15, 16, 17, 18
 
 # ---------------- input registers (3xxxx) ----------------
-IR_COUNT = 23           # 30001..30023
+IR_COUNT = 24           # 30001..30024
 
 PU_WHEEL_DIAMETER_MM = 95.0
 NAME_LEN = 16
@@ -231,6 +231,12 @@ class MachineStatus:
     m6_moving: bool
     safety_bench_mode: bool = False   # firmware built without safety chain (KM1 locked off)
     safety_via_li_ext: bool = False   # PCB v1: safety read through the LI extension
+    estop_ok: bool = False            # 30024 bit0: E-Stop released
+    door_closed: bool = False         # 30024 bit1
+    air_ok_sw: bool = False           # 30024 bit2: air pressure switch
+    reset_pressed: bool = False       # 30024 bit3: SAFETY_RESET button
+    io_bus_ok: bool = False           # 30024 bit4: LI cable OK
+    safety_ext_raw: int = 0           # 30024 high byte: raw LI extension byte
 
     @property
     def state_name(self) -> str:
@@ -274,4 +280,10 @@ class MachineStatus:
             m6_moving=bool(r[22] & 4),
             safety_bench_mode=bool(r[22] & 8),
             safety_via_li_ext=bool(r[22] & 16),
+            estop_ok=bool(r[23] & 1),
+            door_closed=bool(r[23] & 2),
+            air_ok_sw=bool(r[23] & 4),
+            reset_pressed=bool(r[23] & 8),
+            io_bus_ok=bool(r[23] & 16),
+            safety_ext_raw=r[23] >> 8,
         )

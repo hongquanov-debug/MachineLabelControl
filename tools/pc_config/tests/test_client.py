@@ -37,7 +37,7 @@ class FakeController:
         return _Resp(out)
 
     def read_input_registers(self, address, count=1):
-        regs = [0] * 23
+        regs = [0] * 24
         regs[0] = 4 if self.running else 3
         regs[22] = 0 if self.running else 3
         return _Resp(regs[address:address + count])
