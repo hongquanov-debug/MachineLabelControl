@@ -10,6 +10,7 @@ Firmware bộ điều khiển trung tâm **dây chuyền chỉnh góc & dán tem
 | Đặc tả | [`docs/FIRMWARE_PROCESS_SPEC.md`](docs/FIRMWARE_PROCESS_SPEC.md) REV 3.2 – *single source of truth* |
 | Ghi chú spec | [`docs/SPEC_NOTES.md`](docs/SPEC_NOTES.md) – mâu thuẫn trong spec & chân I/O cần xác nhận |
 | Người mới | [`docs/HAL_GUIDE.md`](docs/HAL_GUIDE.md) – hướng dẫn đọc code, khái niệm HAL & FreeRTOS |
+| Giải thích code | [`docs/CODE_WALKTHROUGH.md`](docs/CODE_WALKTHROUGH.md) – cấu trúc thư mục, giải thích từng module & luồng hoạt động |
 
 > ⚠️ Các chân không có trong spec quy trình được gán tạm và đánh dấu `TODO(HW)`.
 > **Phải đối chiếu với Hardware Spec V3.2 trước khi nạp lên máy thật** (xem `docs/SPEC_NOTES.md` mục B).
