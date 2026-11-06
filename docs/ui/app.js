@@ -2,7 +2,7 @@
  * PMeMS Controller 1 - logic mockup giao diện.
  *
  * MỌI DỮ LIỆU Ở ĐÂY LÀ GIẢ LẬP để thấy giao diện "sống". Khi viết bằng PyQt6:
- *   - phần "SIM" thay bằng dữ liệu thật: PmemsClient (tools/pc_config) đọc
+ *   - phần "SIM" thay bằng dữ liệu thật: PmemsClient (VisionControl) đọc
  *     Modbus TCP, và module xử lý ảnh của bạn.
  *   - mỗi hàm render...() tương ứng một slot cập nhật widget (xem README.md).
  * ========================================================================== */
@@ -846,7 +846,7 @@ $("#recipe-form").addEventListener("input", e => {
   }
 });
 
-// Kiểm tra cục bộ giống Recipe.validate() của tools/pc_config, rồi mới gửi
+// Kiểm tra cục bộ giống Recipe.validate() của VisionControl, rồi mới gửi
 function saveForm(activate) {
   if ($$("#recipe-form .field.bad").length) return addLog("warn", "Recipe", "", "Có giá trị ngoài phạm vi – chưa lưu");
   if (activate && ["RUN", "PAUSE", "HOMING"].includes(S.state)) return addLog("err", "Recipe", "", "ERR_STATE: máy đang chạy, không đổi recipe đang dùng");

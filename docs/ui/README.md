@@ -43,7 +43,7 @@ Khung ứng dụng cố định **1024 × 768**, nút bấm cao ≥ 44 px để 
 
 ## 2. Các trang và nguồn dữ liệu
 
-Nguồn dữ liệu là thư viện `tools/pc_config` (`PmemsClient`, Modbus TCP qua Ethernet)
+Nguồn dữ liệu là thư viện `VisionControl` (`PmemsClient`, Modbus TCP qua Ethernet)
 và module xử lý ảnh của bạn.
 
 ### 2.1. Tổng quan
@@ -207,7 +207,7 @@ pc_app/
 │   ├── widgets/            # ConveyorView, LedLabel, KpiCard...
 │   └── style.qss
 ├── workers/
-│   ├── modbus_worker.py    # dùng tools/pc_config/pmems_config
+│   ├── modbus_worker.py    # dùng VisionControl/pmems_config
 │   └── vision_worker.py
 ├── data/
 │   ├── history_db.py       # SQLite: sản lượng theo phút, nhật ký

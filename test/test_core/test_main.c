@@ -273,7 +273,7 @@ static void test_recipe_defaults_and_crc(void)
 /* ---------------- Recipe <-> Modbus registers (PC config tool) ---------------- */
 static void test_recipe_regs_layout_vector(void)
 {
-    /* Same vector is checked by tools/pc_config/tests/test_registers.py */
+    /* Same vector is checked by VisionControl/tests/test_registers.py */
     CanRecipe_t r;
     recipe_factory_default(3, 300, &r);       /* CAN_330ML_SLK, D=58.0, H=145.0 */
     r.tab_to_label_offset = -1250;

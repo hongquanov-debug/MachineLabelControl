@@ -18,7 +18,7 @@
 8. [Lớp phần cứng `src/bsp/`](#8-lớp-phần-cứng-srcbsp)
 9. [Lớp ứng dụng `src/app/`](#9-lớp-ứng-dụng-srcapp)
 10. [Các luồng hoạt động từ đầu tới cuối](#10-các-luồng-hoạt-động-từ-đầu-tới-cuối)
-11. [Kiểm thử `test/` và công cụ PC `tools/pc_config/`](#11-kiểm-thử-test-và-công-cụ-pc-toolspc_config)
+11. [Kiểm thử `test/` và công cụ PC `VisionControl/`](#11-kiểm-thử-test-và-công-cụ-pc-visioncontrol)
 12. [Hướng dẫn sửa / mở rộng thường gặp](#12-hướng-dẫn-sửa--mở-rộng-thường-gặp)
 13. [Bảng tra cứu nhanh](#13-bảng-tra-cứu-nhanh)
 
@@ -136,7 +136,7 @@ MachineLabelControl/
 │       └── net_link.c/.h          (75)   Modbus TCP server (Ethernet)
 │
 ├── test/test_core/test_main.c    (312)   16 unit test cho lib/pmems_core (Unity)
-├── tools/pc_config/                      Thư viện + dòng lệnh Python cho PC cấu hình máy
+├── VisionControl/                         Phần mềm PC PyQt6 + thư viện pmems_config (Modbus TCP)
 └── docs/                                 Tài liệu (bạn đang đọc)
 ```
 
@@ -1058,7 +1058,7 @@ PC Python: plc.save_recipe(r, activate=True)
 
 ---
 
-## 11. Kiểm thử `test/` và công cụ PC `tools/pc_config/`
+## 11. Kiểm thử `test/` và công cụ PC `VisionControl/`
 
 ### 11.1. Unit test C (`pio test -e native`)
 
@@ -1074,14 +1074,15 @@ PC Python: plc.save_recipe(r, activate=True)
 | `test_orient_math` | Chuẩn hóa góc, số xung M2 |
 | `test_recipe_*` (3) | Mặc định, CRC, chuyển đổi thanh ghi (khớp với test Python) |
 
-### 11.2. `tools/pc_config/` (Python)
+### 11.2. `VisionControl/` (Python)
 
 | File | Vai trò |
 |---|---|
 | `pmems_config/registers.py` | Địa chỉ thanh ghi, `Recipe` (đơn vị mm/độ) ↔ thanh ghi, giải mã `MachineStatus` |
 | `pmems_config/client.py` | `PmemsClient`: `read_status`, `read_recipe`, `save_recipe`, `select_recipe`, `send_command` |
 | `pmems_config/__main__.py` | Dòng lệnh: `python -m pmems_config --host ... status / recipe-list / recipe-set ...` |
-| `tests/` | 10 test (chạy không cần máy thật, dùng bộ điều khiển giả lập) |
+| `tests/` | Test Python (`python -m unittest discover -s tests -t .`) (chạy không cần máy thật, dùng bộ điều khiển giả lập) |
+| `visioncontrol/` | Ứng dụng giao diện PyQt6 – đặc tả trong `VisionControl/UI_SPEC.md` |
 
 ---
 
@@ -1098,7 +1099,7 @@ Sửa `include/app_config.h` (vd `VISION_TIMEOUT_MS`, `ENC_POS_LABEL`). Không c
 1. Thêm hằng vào `AlarmCode_t` (`alarm.h`).
 2. Thêm mức độ vào `k_severity[]` (`alarm.c`).
 3. Gọi `alarm_raise(ALM_xx)` nơi phát hiện lỗi.
-4. Thêm tên vào `ALARM_NAMES` trong `tools/pc_config/pmems_config/registers.py`.
+4. Thêm tên vào `ALARM_NAMES` trong `VisionControl/pmems_config/registers.py`.
 
 ### Thêm một thanh ghi Modbus
 - Holding (ghi được): thêm `case` trong `rd_holding()` và `wr_holding()` (`modbus_regs.c`).

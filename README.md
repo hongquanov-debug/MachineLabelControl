@@ -93,7 +93,7 @@ pio test -e native
 │       ├── net_link          # Modbus TCP server – W5500
 │       └── app_main          # Khởi tạo & tạo task
 ├── test/test_core/           # Unit test (Unity)
-├── tools/pc_config/          # Thư viện + CLI Python cấu hình máy qua Ethernet (PC Vision)
+├── VisionControl/             # Phần mềm PC (PyQt6): giao diện, Modbus TCP, RS485 vision, pmems_config
 └── docs/
 ```
 
@@ -147,7 +147,7 @@ một bản đồ thanh ghi.
 Phân chia kết nối với PC Vision:
 - **RS485_3**: chỉ dùng cho kết quả góc lệch từng lon (thời gian thực).
 - **Ethernet (Modbus TCP)**: cấu hình recipe (đường kính, chiều cao, offset…), lệnh máy, trạng thái.
-  Vùng "recipe editor" 40021..40041 – xem [`tools/pc_config/README.md`](tools/pc_config/README.md).
+  Vùng "recipe editor" 40021..40041 – xem [`VisionControl/pmems_config/README.md`](VisionControl/pmems_config/README.md).
 
 ## 5. Việc cần làm trước khi chạy thử trên máy
 
