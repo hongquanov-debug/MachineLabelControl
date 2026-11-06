@@ -39,6 +39,8 @@ const ALARMS = {
   6: ["VACUUM_FEED_MISS", "Đầu hút không giữ được tem", "warn"],
   7: ["LABEL_TAPE_EMPTY", "Hết cuộn tem / đứt băng tem", "warn"],
   8: ["CYL_P5_TIMEOUT", "Xi lanh dán P5 quá 150 ms", "err"],
+  9: ["CODE_CAM_TIMEOUT", "Camera 2 không trả kết quả mã 3 lần liên tiếp", "err"],
+  21: ["CODE_NG_REPEATED", "5 lon liên tiếp mã DataMatrix lỗi – kiểm tra máy in / cuộn tem", "err"],
   20: ["LI32_BUS_DISCONNECT", "Tuột cáp module ngõ vào LI32 / LI mở rộng", "err"],
 };
 
@@ -56,6 +58,10 @@ const S = {
   recent: [],            // lon đã qua Vision gần nhất
   camLast: null,         // kết quả Vision gần nhất
   camStats: { ok: 0, ng: 0, tmo: 0, crc: 0, sum: 0, n: 0 },
+  cam: 1,                // camera đang xem trên trang Camera
+  codeLast: null,        // kết quả camera 2 gần nhất
+  codeStats: { ok: 0, ng: 0, tmo: 0, dup: 0, consecNg: 0 },
+  serial: 0x3A7F21,
   inspOk: 0, inspNg: 0, released: 0,
   log: [],
   logPaused: false,
@@ -175,7 +181,7 @@ $$("[data-offset]").forEach(b => b.addEventListener("click", () => {
 /* ------------------------------------------------------------------------ */
 /* SIM: băng tải, lon, Vision  (chạy mỗi 100 ms)                             */
 /* ------------------------------------------------------------------------ */
-const ST = { cam: 50, orient: 300, label: 650, insp: 950, rej: 1250, end: 2000 };
+const ST = { cam: 50, orient: 300, label: 650, insp: 950, code: 1050, rej: 1250, end: 2000 };
 
 function simStep(dt) {
   const running = S.state === "RUN" || S.state === "PAUSE";
@@ -199,8 +205,9 @@ function simStep(dt) {
       if (Math.random() < 0.985) { c.st = "lab"; } else { c.st = "ng"; c.why = "Hụt chân không"; raiseAlarm(6); }
     }
     if (c.st === "lab" && c.x >= ST.insp) {
-      if (Math.random() < 0.995) { c.st = "pass"; S.inspOk++; } else { c.st = "ng"; c.why = "Mất tem (S5)"; S.inspNg++; }
+      if (Math.random() < 0.995) { c.st = "insp"; S.inspOk++; } else { c.st = "ng"; c.why = "Mất tem (S5)"; S.inspNg++; }
     }
+    if (c.st === "insp" && c.x >= ST.code) codeResult(c);   // camera 2: DataMatrix
     if ((c.st === "ng" || c.st === "vng") && c.x >= ST.rej && !c.rejected) {
       c.rejected = true; S.ng++; c.y = 0;
       addLog("warn", "P8", "", `Loại lon #${c.id}: ${c.why}`);
@@ -213,6 +220,31 @@ function simStep(dt) {
   });
 
   if (S.state === "RUN" && Math.random() < 0.0004) raiseAlarm(4);   // thỉnh thoảng có cảnh báo để thấy giao diện alarm
+}
+
+/* SIM camera 2: kết quả đọc DataMatrix (PyQt6: VisionWorker gửi gói 0x21 rồi phát signal) */
+const CODE_Q = { OK: ["0x00 OK", "ok"], NO_CODE: ["0x10 NO_CODE", "err"], UNREADABLE: ["0x11 UNREADABLE", "err"],
+  INVALID: ["0x12 INVALID", "err"], DUPLICATE: ["0x13 DUPLICATE", "warn"], LOW_GRADE: ["0x14 LOW_GRADE", "warn"], TIMEOUT: ["— timeout", "warn"] };
+const GRADE = ["F", "D", "C", "B", "A"];
+function codeResult(c) {
+  const r = Math.random();
+  const q = r < 0.010 ? "NO_CODE" : r < 0.022 ? "UNREADABLE" : r < 0.027 ? "DUPLICATE" : r < 0.032 ? "LOW_GRADE" : r < 0.036 ? "TIMEOUT" : "OK";
+  const serial = (S.serial++).toString(36).toUpperCase().padStart(8, "0");
+  const data = q === "NO_CODE" || q === "UNREADABLE" || q === "TIMEOUT" ? null : `(01)08935049501234(21)${serial}(17)271231(10)L2611`;
+  const grade = data ? (q === "LOW_GRADE" ? 1 : 2 + Math.floor(Math.random() * 3)) : null;
+  const res = { id: c.id, q, data, grade, proc: q === "TIMEOUT" ? 150 : rnd(28, 75), t: now(), seed: S.serial };
+  S.codeLast = res;
+  c.code = q;
+  const cs = S.codeStats;
+  if (q === "OK") { c.st = "pass"; cs.ok++; cs.consecNg = 0; }
+  else {
+    c.st = "ng"; c.why = "Mã DataMatrix: " + q; cs.ng++;
+    if (q === "TIMEOUT") cs.tmo++;
+    if (q === "DUPLICATE") cs.dup++;
+    addLog(q === "TIMEOUT" ? "warn" : "info", "Cam2", q === "TIMEOUT" ? "" : "", `Lon #${c.id}: ${CODE_Q[q][0]}`);
+    if (++cs.consecNg >= 5) raiseAlarm(21);
+  }
+  addRowDmHistory(res);
 }
 
 function visionResult(c) {
@@ -279,15 +311,16 @@ const mm2x = mm => CV.x0 + (CV.x1 - CV.x0) * mm / 2000;
 
 function buildConveyor() {
   const svg = $("#conveyor-svg");
-  const sts = [[0, "S2"], [50, "Camera"], [300, "Chỉnh góc"], [650, "Dán tem"], [950, "S5"], [1250, "Loại P8"], [2000, "Ra"]];
+  const sts = [[0, "S2"], [50, "Cam 1"], [300, "Chỉnh góc"], [650, "Dán tem"], [950, "S5"], [1050, "Cam 2"], [1250, "Loại P8"], [2000, "Ra"]];
   let h = `<rect x="${CV.x0}" y="${CV.y - 14}" width="${CV.x1 - CV.x0}" height="28" rx="14" fill="#202a35" stroke="#2f3b49"/>`;
   for (let i = 0; i < 40; i++) h += `<line class="belt-line" x1="${CV.x0 + i * 15}" y1="${CV.y - 12}" x2="${CV.x0 + i * 15}" y2="${CV.y + 12}" stroke="#2a3542"/>`;
   sts.forEach(([mm, name], i) => {
     const x = mm2x(mm);
-    const up = i === 1 ? 16 : 0;   // nhãn "Camera" đặt cao hơn để không đè lên "S2"
-    h += `<line x1="${x}" y1="${CV.y - 30 - up}" x2="${x}" y2="${CV.y - 16}" stroke="#56677a" stroke-width="2"/>`;
-    h += `<text x="${x}" y="${CV.y - 36 - up}" fill="#8b98a6" font-size="11" text-anchor="middle">${name}</text>`;
-    h += `<text x="${x}" y="${CV.y + 32 + (i === 1 ? 10 : 0)}" fill="#56677a" font-size="9" text-anchor="middle">${mm}</text>`;
+    const up = (i === 1 || i === 5) ? 16 : 0;   // "Cam 1"/"Cam 2" đặt cao hơn để không đè lên nhãn bên cạnh
+    const cam = i === 1 || i === 5;
+    h += `<line x1="${x}" y1="${CV.y - 30 - up}" x2="${x}" y2="${CV.y - 16}" stroke="${cam ? "#38bdf8" : "#56677a"}" stroke-width="2"/>`;
+    h += `<text x="${x}" y="${CV.y - 36 - up}" fill="${cam ? "#7dd3fc" : "#8b98a6"}" font-size="11" text-anchor="middle">${name}</text>`;
+    h += `<text x="${x}" y="${CV.y + 32 + (up ? 10 : 0)}" fill="#56677a" font-size="9" text-anchor="middle">${mm}</text>`;
   });
   h += `<g id="cans"></g>`;
   h += `<text x="${CV.x1}" y="${CV.y + 50}" fill="#56677a" font-size="9" text-anchor="end">mm từ S2</text>`;
@@ -295,7 +328,7 @@ function buildConveyor() {
 }
 
 function renderConveyor() {
-  const col = { new: "#56677a", vok: "#3b8bf6", ori: "#3b8bf6", lab: "#22c55e", pass: "#22c55e", ng: "#ef4444", vng: "#ef4444" };
+  const col = { new: "#56677a", vok: "#3b8bf6", ori: "#3b8bf6", lab: "#22c55e", insp: "#22c55e", pass: "#22c55e", ng: "#ef4444", vng: "#ef4444" };
   $("#cans").innerHTML = S.cans.map(c => {
     const fill = c.st === "new" && c.x >= ST.cam ? "#38bdf8" : col[c.st];
     return `<circle cx="${mm2x(c.x)}" cy="${CV.y + (c.y || 0)}" r="7" fill="${fill}" stroke="#0e1318" stroke-width="2"/>`;
@@ -319,8 +352,9 @@ function renderDashboard() {
   $("#dash-recent").innerHTML = S.recent.slice(0, 8).map(c => {
     const res = c.rejected ? '<span class="tag err">Loại</span>' : c.st === "pass" ? '<span class="tag ok">Đạt</span>'
       : c.st === "ng" || c.st === "vng" ? '<span class="tag err">NG</span>' : '<span class="tag muted">Đang chạy</span>';
-    const q = c.q === "OK" ? '<span class="tag ok">OK</span>' : `<span class="tag ${c.q === "TIMEOUT" ? "warn" : "err"}">${c.q}</span>`;
-    return `<tr><td class="mono">#${c.id}</td><td class="num">${c.theta == null ? "–" : c.theta.toFixed(2) + "°"}</td><td>${q}</td><td>${res}</td></tr>`;
+    const q = c.q === "OK" ? '<span class="tag ok">OK</span>' : `<span class="tag ${c.q === "TIMEOUT" ? "warn" : "err"}">${c.q === "TIMEOUT" ? "TMO" : "NG"}</span>`;
+    const q2 = !c.code ? '<span class="muted">–</span>' : c.code === "OK" ? '<span class="tag ok">OK</span>' : `<span class="tag ${CODE_Q[c.code][1]}">NG</span>`;
+    return `<tr><td class="mono">#${c.id}</td><td class="num">${c.theta == null ? "–" : c.theta.toFixed(2) + "°"}</td><td>${q}</td><td>${q2}</td><td>${res}</td></tr>`;
   }).join("");
 }
 
@@ -387,15 +421,99 @@ function addRowCamHistory(r) {
 }
 
 let camMode = "live";
-$("#cam-mode").addEventListener("change", e => { camMode = e.detail; });
+$("#cam-mode").addEventListener("change", e => { camMode = e.detail; renderCamera.frozen = false; });
+$("#cam-select").addEventListener("change", e => {
+  S.cam = +e.detail;
+  $("#page-camera").dataset.cam = e.detail;
+  $("#cam-hist-note").textContent = S.cam === 1 ? "gói 0x20 gửi về MCU qua RS485_3" : "gói 0x21 gửi về MCU · dữ liệu lưu ở PC để truy xuất";
+  renderCamera.frozen = false;
+});
+
+function addRowDmHistory(r) {
+  const tb = $("#dm-history");
+  const [qt, qc] = CODE_Q[r.q];
+  tb.insertAdjacentHTML("afterbegin",
+    `<tr><td class="mono">${hhmmss(r.t)}</td><td class="mono">${r.id}</td><td class="dm" title="${r.data || ""}">${r.data || '<span class="muted">—</span>'}</td>` +
+    `<td>${r.grade == null ? "–" : GRADE[r.grade]}</td><td><span class="tag ${qc}">${qt}</span></td>` +
+    `<td class="num">${r.q === "TIMEOUT" ? "&gt;150" : r.proc.toFixed(0)} ms</td></tr>`);
+  while (tb.rows.length > 60) tb.deleteRow(-1);
+}
+
+/* Vẽ ảnh camera 2: tem trên nắp lon + mã DataMatrix + khung nhận diện */
+function drawCode(cv, res) {
+  if (cv.clientWidth && (cv.width !== cv.clientWidth || cv.height !== cv.clientHeight)) {
+    cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+  }
+  const g = cv.getContext("2d");
+  const W = cv.width, H = cv.height, cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) * 0.42;
+  g.fillStyle = "#050607"; g.fillRect(0, 0, W, H);
+  if (!res) { g.fillStyle = "#56677a"; g.font = "13px sans-serif"; g.textAlign = "center"; g.fillText("Chờ ảnh…", cx, cy); return; }
+  const grd = g.createRadialGradient(cx - R * .3, cy - R * .3, R * .1, cx, cy, R);
+  grd.addColorStop(0, "#c9ced3"); grd.addColorStop(1, "#6d747b");
+  g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill();
+  const ang = ((res.seed * 37) % 11 - 5) * Math.PI / 180;     // tem lệch nhẹ
+  const L = R * 1.05, Hh = R * 0.7;
+  g.save(); g.translate(cx, cy); g.rotate(ang);
+  if (res.q !== "NO_CODE") {
+    g.fillStyle = "#f4f1ea"; g.fillRect(-L / 2, -Hh / 2, L, Hh);             // tem
+    g.fillStyle = "#1d2a3a"; g.font = `bold ${Math.round(R * .09)}px sans-serif`; g.textAlign = "left";
+    g.fillText("NAM VIET", -L / 2 + R * .06, -Hh / 2 + R * .14);
+    // mã DataMatrix 16x16: viền chữ L liền (trái, dưới), viền chấm (trên, phải), dữ liệu giả từ seed
+    const N = 16, m = Math.floor(R * 0.36 / N), S0 = m * N, x0 = L / 2 - S0 - R * .08, y0 = -S0 / 2;
+    let seed = res.seed * 9301 + 49297;
+    const rndb = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) >> 16) & 1;
+    g.fillStyle = "#111";
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const on = c === 0 || r === N - 1 ? 1 : r === 0 ? (c % 2 === 0) : c === N - 1 ? (r % 2 === 1) : rndb();
+      if (on) g.fillRect(x0 + c * m, y0 + r * m, m, m);
+    }
+    if (res.q === "UNREADABLE") { g.fillStyle = "rgba(244,241,234,.85)"; g.fillRect(x0 + S0 * .2, y0 + S0 * .3, S0 * .6, S0 * .35); }
+    // khung nhận diện
+    if (res.data) {
+      g.strokeStyle = res.q === "OK" ? "#22c55e" : "#f5a524"; g.lineWidth = 3;
+      g.strokeRect(x0 - 4, y0 - 4, S0 + 8, S0 + 8);
+    } else {
+      g.strokeStyle = "#ef4444"; g.lineWidth = 2; g.setLineDash([6, 4]);
+      g.strokeRect(x0 - 6, y0 - 6, S0 + 12, S0 + 12); g.setLineDash([]);
+    }
+    g.fillStyle = "#56677a"; g.font = `${Math.round(R * .06)}px sans-serif`;
+    g.fillText("HSD 31/12/27  LOT L2611", -L / 2 + R * .06, Hh / 2 - R * .08);
+  }
+  g.restore();
+  // chuỗi giải mã ở đáy ảnh
+  const okc = res.q === "OK" ? "#22c55e" : res.data ? "#f5a524" : "#ef4444";
+  g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(0, H - 30, W, 30);
+  g.fillStyle = okc; g.font = "bold 13px Consolas, monospace"; g.textAlign = "center";
+  g.fillText(res.data || (res.q === "NO_CODE" ? "KHÔNG THẤY MÃ" : res.q === "TIMEOUT" ? "QUÁ THỜI GIAN" : "KHÔNG GIẢI MÃ ĐƯỢC"), W / 2, H - 10);
+}
+
+function renderCamera2() {
+  const r = S.codeLast, cs = S.codeStats;
+  const show = camMode === "ng" ? (S.codeLastNg || null) : r;
+  if (camMode !== "last" || !renderCamera.frozen) { drawCode($("#cam-canvas"), show); renderCamera.frozen = camMode === "last"; }
+  if (!r) return;
+  if (r.q !== "OK") S.codeLastNg = r;
+  $("#cam-osd").innerHTML = `CAN #${r.id}<br>${r.q}`;
+  $("#cam-osd-r").innerHTML = `EXP 80 µs<br>${r.q === "TIMEOUT" ? "&gt;150" : r.proc.toFixed(1)} ms`;
+  $("#dm-result").textContent = r.q === "OK" ? "ĐẠT" : "LỖI";
+  $("#dm-result").className = r.q === "OK" ? "ok-t" : "err-t";
+  const qt = $("#dm-q"); qt.textContent = CODE_Q[r.q][0]; qt.className = "tag " + CODE_Q[r.q][1];
+  $("#dm-data").textContent = r.data || "— không có dữ liệu —";
+  $("#dm-grade").textContent = r.grade == null ? "–" : GRADE[r.grade];
+  $("#dm-proc").textContent = r.q === "TIMEOUT" ? ">150 ms" : r.proc.toFixed(1) + " ms";
+  $("#dm-ok").textContent = cs.ok; $("#dm-ng").textContent = cs.ng;
+  $("#dm-tmo").textContent = cs.tmo; $("#dm-dup").textContent = cs.dup;
+}
 
 function renderCamera() {
+  drawLid($("#mini-cam"), S.camLast, false);
+  if (S.cam === 2) return renderCamera2();
   const r = S.camLast;
   const cs = S.camStats;
   const show = camMode === "ng" ? S.recent.find(c => c.q !== "OK") : null;
   const res = camMode === "ng" ? (show ? { id: show.id, theta: show.theta, q: show.q } : null) : r;
   if (camMode !== "last" || !renderCamera.frozen) { drawLid($("#cam-canvas"), res, true); renderCamera.frozen = camMode === "last"; }
-  drawLid($("#mini-cam"), r, false);
   if (!r) return;
   $("#mini-cam-info").textContent = `${(cs.n ? cs.sum / cs.n : 0).toFixed(0)} ms`;
   $("#cam-osd").innerHTML = `CAN #${r.id}<br>θ = ${r.theta == null ? "–" : r.theta.toFixed(2) + "°"}`;
@@ -465,6 +583,9 @@ function renderMonitor() {
   $("#st-insp-ok").textContent = S.inspOk; $("#st-insp-ng").textContent = S.inspNg;
   const rej = S.cans.some(c => c.rejected && c.y < 20);
   set("#st-rej", rej ? "ĐANG ĐẨY" : "Sẵn sàng", rej ? "err-t" : "muted");
+  const dm = S.cans.find(c => c.x > 1020 && c.x < 1080);
+  set("#st-dm", dm ? "Đọc #" + dm.id : (run ? "Chờ lon" : "Chờ lon"), dm ? "info-t" : "muted");
+  $("#st-dm-ok").textContent = S.codeStats.ok; $("#st-dm-ng").textContent = S.codeStats.ng;
   $("#st-rej-n").textContent = S.ng; $("#st-p8").textContent = rej ? "Ra" : "Về";
 
   // trục
@@ -786,11 +907,12 @@ function buildReport() {
   });
   $("#rp-chart").innerHTML = s;
 
-  const reasons = [["Vision: không thấy khoen", 412], ["Vision: timeout", 156], ["Hụt chân không", 98], ["Mất tem (S5)", 61], ["Lon sai loại", 23]];
+  const reasons = [["Vision: không thấy khoen", 412], ["Mã DM: không đọc được", 287], ["Vision: timeout", 156], ["Hụt chân không", 98],
+    ["Mã DM: trùng / sai nội dung", 64], ["Mất tem (S5)", 61]];
   const rmax = reasons[0][1];
   $("#rp-ng-bars").innerHTML = reasons.map(([t, n]) =>
     `<div class="ng-bar"><div class="row"><span>${t}</span><b class="mono">${n}</b></div><div class="bar"><i style="width:${n / rmax * 100}%"></i></div></div>`).join("");
-  $("#rp-stop-table").innerHTML = [["ALM_07", "Hết cuộn tem", 2], ["ALM_05", "Vision timeout", 1], ["—", "Dừng tay", 1]]
+  $("#rp-stop-table").innerHTML = [["ALM_07", "Hết cuộn tem", 2], ["ALM_21", "Mã DM lỗi liên tiếp", 1], ["ALM_05", "Vision timeout", 1]]
     .map(([c, t, n]) => `<tr><td class="mono">${c}</td><td>${t}</td><td class="num">${n}</td></tr>`).join("");
 }
 
@@ -798,7 +920,7 @@ function buildReport() {
 /* Trang Nhật ký  (PyQt6: QTableView + QSortFilterProxyModel)                */
 /* ------------------------------------------------------------------------ */
 const LV = { err: ["err", "Lỗi"], warn: ["warn", "Cảnh báo"], info: ["info", "Thông tin"] };
-const CAT = { alarm: ["Alarm", "P8"], vision: ["Vision"], comm: ["Modbus", "RS485"], event: ["FSM", "HMI", "Recipe"] };
+const CAT = { alarm: ["Alarm", "P8"], vision: ["Vision", "Cam2"], comm: ["Modbus", "RS485"], event: ["FSM", "HMI", "Recipe"] };
 
 function renderLog() {
   const q = $("#log-search").value.trim().toLowerCase();

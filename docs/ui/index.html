@@ -31,7 +31,8 @@
     <div class="safety-chip ok" id="hdr-safety" title="Trạng thái chuỗi an toàn">AN TOÀN OK</div>
     <div class="links">
       <span class="link"><i class="dot ok" id="lnk-plc"></i>PLC</span>
-      <span class="link"><i class="dot ok" id="lnk-cam"></i>Camera</span>
+      <span class="link"><i class="dot ok" id="lnk-cam"></i>Cam1</span>
+      <span class="link"><i class="dot ok" id="lnk-cam2"></i>Cam2</span>
       <span class="link"><i class="dot ok" id="lnk-485"></i>RS485</span>
     </div>
     <button class="user-btn" id="btn-user">👤 Vận hành ▾</button>
@@ -120,7 +121,7 @@
         <div class="card">
           <h3>Lon gần nhất</h3>
           <div class="table-wrap"><table>
-            <thead><tr><th>ID</th><th class="num">Góc θ</th><th>Vision</th><th>Kết quả</th></tr></thead>
+            <thead><tr><th>ID</th><th class="num">Góc θ</th><th>Cam1</th><th>Cam2</th><th>Kết quả</th></tr></thead>
             <tbody id="dash-recent"></tbody>
           </table></div>
         </div>
@@ -132,9 +133,9 @@
     </section>
 
     <!-- ===================== 2. CAMERA ===================== -->
-    <section class="page" id="page-camera">
+    <section class="page" id="page-camera" data-cam="1">
       <div class="card">
-        <h3>Hình ảnh trực tiếp
+        <h3><span class="seg" id="cam-select"><button class="active" data-v="1">Camera 1 · Góc lệch</button><button data-v="2">Camera 2 · DataMatrix</button></span>
           <span class="right row">
             <span class="seg" id="cam-mode"><button class="active" data-v="live">Trực tiếp</button><button data-v="last">Ảnh cuối</button><button data-v="ng">Ảnh lỗi</button></span>
           </span></h3>
@@ -146,7 +147,39 @@
       </div>
 
       <div class="cam-side">
-        <div class="card">
+        <!-- ===== Camera 2: DataMatrix (gói 0x21) ===== -->
+        <div class="card cam2-only">
+          <h3>Kết quả đọc mã <span class="right mono muted">0x21</span></h3>
+          <div class="result-big"><b id="dm-result">–</b><span class="tag ok" id="dm-q">–</span></div>
+          <div class="dm-data" id="dm-data">–</div>
+          <div class="stat-grid" style="margin-top:8px">
+            <div class="stat"><small>Chất lượng in (grade)</small><b id="dm-grade">–</b></div>
+            <div class="stat"><small>Thời gian xử lý</small><b id="dm-proc">– ms</b></div>
+            <div class="stat"><small>Đọc đạt</small><b class="ok-t" id="dm-ok">0</b></div>
+            <div class="stat"><small>Không đạt</small><b class="err-t" id="dm-ng">0</b></div>
+            <div class="stat"><small>Timeout (&gt;150 ms)</small><b class="warn-t" id="dm-tmo">0</b></div>
+            <div class="stat"><small>Trùng mã</small><b class="warn-t" id="dm-dup">0</b></div>
+          </div>
+        </div>
+        <div class="card grow cam2-only">
+          <h3>Quy tắc kiểm tra mã</h3>
+          <div class="rule-list">
+            <div><span>Định dạng</span><b>GS1 DataMatrix</b></div>
+            <div><span>GTIN (01) theo recipe</span><b class="mono">08935049501234</b></div>
+            <div><span>Độ dài dữ liệu</span><b>30 – 48 ký tự</b></div>
+            <div><span>Grade tối thiểu</span><b>C</b></div>
+            <div><span>Kiểm tra trùng serial (21)</span><b>Trong ca</b></div>
+          </div>
+          <div class="cam-btns">
+            <button class="btn sm">Chụp thử</button>
+            <button class="btn sm">Lưu ảnh</button>
+            <button class="btn sm">Vùng ROI</button>
+            <button class="btn sm primary">Sửa quy tắc</button>
+          </div>
+        </div>
+
+        <!-- ===== Camera 1: góc lệch khoen (gói 0x20) ===== -->
+        <div class="card cam1-only">
           <h3>Kết quả nhận diện</h3>
           <div class="result-big"><b id="cam-theta">–</b><span class="tag ok" id="cam-q">–</span></div>
           <div class="stat-grid" style="margin-top:8px">
@@ -158,7 +191,7 @@
             <div class="stat"><small>Lỗi CRC RS485</small><b id="cam-crc">0</b></div>
           </div>
         </div>
-        <div class="card grow">
+        <div class="card grow cam1-only">
           <h3>Thông số chụp</h3>
           <div class="slider"><div class="row"><span>Phơi sáng</span><span id="v-exp">120 µs</span></div><input type="range" min="20" max="500" value="120" data-out="v-exp" data-unit=" µs"></div>
           <div class="slider"><div class="row"><span>Gain</span><span id="v-gain">4 dB</span></div><input type="range" min="0" max="24" value="4" data-out="v-gain" data-unit=" dB"></div>
@@ -173,10 +206,14 @@
       </div>
 
       <div class="card">
-        <h3>Lịch sử nhận diện <span class="right muted">gói 0x20 nhận từ phần xử lý ảnh → gửi về MCU qua RS485_3</span></h3>
-        <div class="table-wrap"><table>
+        <h3>Lịch sử <span class="right muted" id="cam-hist-note">gói 0x20 gửi về MCU qua RS485_3</span></h3>
+        <div class="table-wrap cam1-only"><table>
           <thead><tr><th>Giờ</th><th>CAN_ID</th><th class="num">θ (°)</th><th class="num">θ×100</th><th>QUALITY_FLAG</th><th class="num">Xử lý</th><th>Ghi chú</th></tr></thead>
           <tbody id="cam-history"></tbody>
+        </table></div>
+        <div class="table-wrap cam2-only"><table>
+          <thead><tr><th>Giờ</th><th>CAN_ID</th><th>Dữ liệu DataMatrix</th><th>Grade</th><th>QUALITY_FLAG</th><th class="num">Xử lý</th></tr></thead>
+          <tbody id="dm-history"></tbody>
         </table></div>
       </div>
     </section>
@@ -199,6 +236,8 @@
           <div class="kv">Đầu hút ở 180°<b id="st-head">#1</b></div><div class="kv">Chân không<b id="st-vac">OK</b></div><div class="kv">Chu kỳ<b id="st-lb-ms">– ms</b></div></div>
         <div class="card station"><h3>Kiểm tra S5</h3><div class="st-state" id="st-insp">Chờ lon</div>
           <div class="kv">Có tem<b id="st-insp-ok">0</b></div><div class="kv">Mất tem<b id="st-insp-ng">0</b></div><div class="kv">Vị trí<b>950 mm</b></div></div>
+        <div class="card station"><h3>Đọc mã DM</h3><div class="st-state" id="st-dm">Chờ lon</div>
+          <div class="kv">Đạt<b id="st-dm-ok">0</b></div><div class="kv">Lỗi<b id="st-dm-ng">0</b></div><div class="kv">Vị trí<b>1050 mm</b></div></div>
         <div class="card station"><h3>Loại lỗi P8</h3><div class="st-state" id="st-rej">Sẵn sàng</div>
           <div class="kv">Đã loại<b id="st-rej-n">0</b></div><div class="kv">Xi lanh<b id="st-p8">Về</b></div><div class="kv">Vị trí<b>1250 mm</b></div></div>
 
@@ -326,21 +365,29 @@
       </div>
 
       <div class="subpage" id="cfg-vision">
-        <div class="card"><h3>Camera Hikrobot</h3><div class="cfg-form">
+        <div class="card"><h3>Camera 1 · Góc lệch khoen <span class="right mono muted">+50 mm</span></h3><div class="cfg-form">
           <div class="field"><label>Camera</label><div class="inp"><select><option>MV-CS050-10GM (192.168.2.10)</option></select></div></div>
           <div class="field"><label>Chế độ kích</label><div class="inp"><select><option>Phần cứng (CAM_TRIG PD14)</option><option>Phần mềm</option></select></div></div>
           <div class="field"><label>Phơi sáng</label><div class="inp"><input type="number" value="120"><span class="unit">µs</span></div></div>
           <div class="field"><label>Gain</label><div class="inp"><input type="number" value="4"><span class="unit">dB</span></div></div>
-          <div class="field"><label>Độ phân giải</label><div class="inp"><select><option>1280 × 960</option><option>640 × 480</option></select></div></div>
-          <div class="field"><label>Lưu ảnh lỗi</label><div class="inp"><select><option>Bật – giữ 7 ngày</option><option>Tắt</option></select></div></div>
-        </div></div>
-        <div class="card"><h3>Thuật toán nhận diện khoen</h3><div class="cfg-form">
-          <div class="field"><label>Mô hình</label><div class="inp"><select><option>tab_detect_v3.onnx</option></select></div></div>
+          <div class="field"><label>Mô hình nhận diện</label><div class="inp"><select><option>tab_detect_v3.onnx</option></select></div></div>
           <div class="field"><label>Ngưỡng tin cậy</label><div class="inp"><input type="number" step="0.01" value="0.72"></div></div>
-          <div class="field"><label>Bán kính nắp (px)</label><div class="inp"><input type="number" value="210"></div></div>
           <div class="field"><label>Bù góc camera</label><div class="inp"><input type="number" step="0.01" value="0.00"><span class="unit">°</span></div></div>
-          <div class="field"><label>Thời gian tối đa</label><div class="inp"><input type="number" value="60"><span class="unit">ms</span></div><span class="hint">MCU timeout = 80 ms</span></div>
-          <div class="field"><label>Lớp NG</label><div class="inp"><select><option>NO_TAB, DEFECT, WRONG_TYPE</option></select></div></div>
+          <div class="field"><label>Thời gian tối đa</label><div class="inp"><input type="number" value="60"><span class="unit">ms</span></div><span class="hint">MCU chờ 80 ms</span></div>
+          <div class="field"><label>Lưu ảnh lỗi</label><div class="inp"><select><option>Bật – giữ 7 ngày</option><option>Tắt</option></select></div></div>
+          <div class="field"><label>Độ phân giải</label><div class="inp"><select><option>1280 × 960</option><option>640 × 480</option></select></div></div>
+        </div></div>
+        <div class="card"><h3>Camera 2 · Mã DataMatrix <span class="right mono muted">+1050 mm</span></h3><div class="cfg-form">
+          <div class="field"><label>Camera / đầu đọc</label><div class="inp"><select><option>MV-CS050-10GM (192.168.2.11)</option><option>Đầu đọc mã ID (tự giải mã)</option></select></div></div>
+          <div class="field"><label>Chế độ kích</label><div class="inp"><select><option>Phần cứng (CAM2_TRIG PD15)</option><option>Phần mềm</option></select></div></div>
+          <div class="field"><label>Phơi sáng</label><div class="inp"><input type="number" value="80"><span class="unit">µs</span></div></div>
+          <div class="field"><label>Thư viện giải mã</label><div class="inp"><select><option>zxing-cpp</option><option>pylibdmtx</option><option>Đầu đọc tự giải mã</option></select></div></div>
+          <div class="field"><label>Định dạng</label><div class="inp"><select><option>GS1 DataMatrix</option><option>Chuỗi tự do</option></select></div></div>
+          <div class="field"><label>GTIN (01) yêu cầu</label><div class="inp"><input value="08935049501234"></div><span class="hint">lấy theo recipe</span></div>
+          <div class="field"><label>Độ dài dữ liệu</label><div class="inp"><input value="30 – 48"><span class="unit">ký tự</span></div></div>
+          <div class="field"><label>Grade tối thiểu</label><div class="inp"><select><option>C</option><option>B</option><option>D</option></select></div><span class="hint">thấp hơn → LOW_GRADE</span></div>
+          <div class="field"><label>Kiểm tra trùng serial</label><div class="inp"><select><option>Trong ca</option><option>Trong ngày</option><option>Toàn bộ CSDL</option><option>Tắt</option></select></div></div>
+          <div class="field"><label>Thời gian tối đa</label><div class="inp"><input type="number" value="110"><span class="unit">ms</span></div><span class="hint">MCU chờ 150 ms</span></div>
         </div></div>
       </div>
 

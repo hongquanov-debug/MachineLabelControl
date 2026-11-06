@@ -56,10 +56,16 @@ và module xử lý ảnh của bạn.
 | 7 ô KPI | `QFrame` + 2 `QLabel` | `read_status()`: `speed_cans_min`, `fed`, `ok`, `ng`, `cans_on_belt` |
 | Sơ đồ băng tải | `QGraphicsView` / widget tự vẽ bằng `QPainter` | Vị trí từng lon: tính ở PC từ thời điểm Vision + tốc độ (firmware chưa xuất từng lon) |
 | Camera thu nhỏ | `QLabel.setPixmap()` | Khung hình cuối cùng của module Vision |
-| Lon gần nhất | `QTableView` + model | Lịch sử kết quả Vision ở PC |
+| Lon gần nhất | `QTableView` + model | Kết quả Cam1 (góc) và Cam2 (mã) theo CAN_ID, lưu ở PC |
 | Alarm | `QListWidget` | `status.active_alarms` (30019–30020) |
 
-### 2.2. Camera
+### 2.2. Camera (2 camera)
+
+Nút chọn trên khung ảnh: **Camera 1 · Góc lệch** / **Camera 2 · DataMatrix** (`QButtonGroup`
+đổi trang của một `QStackedWidget` nhỏ ở cột phải và bảng lịch sử). Giao thức của cả hai camera:
+[`docs/VISION_PROTOCOL.md`](../VISION_PROTOCOL.md); thư viện Python `pmems_config.vision_link`.
+
+**Camera 1** (gói `0x10` / `0x20`):
 
 | Thành phần | Widget | Dữ liệu |
 |---|---|---|
@@ -68,6 +74,20 @@ và module xử lý ảnh của bạn.
 | Kết quả θ, thời gian xử lý, thống kê | `QLabel` | Module xử lý ảnh; số lỗi CRC: 30021 |
 | Phơi sáng / Gain / Ngưỡng | `QSlider` + `QLabel` | Cấu hình camera / thuật toán |
 | Lịch sử nhận diện | `QTableView` | Mỗi gói 0x20 gửi về MCU qua RS485_3 |
+
+**Camera 2 – DataMatrix** (gói `0x11` / `0x21`):
+
+| Thành phần | Widget | Dữ liệu |
+|---|---|---|
+| Ảnh tem + khung mã (xanh OK / cam đọc được nhưng bị từ chối / đỏ đứt nét không thấy mã) + chuỗi giải mã ở đáy ảnh | `QLabel` + `QPainter` | Ảnh camera 2, vị trí mã từ bộ giải mã |
+| ĐẠT / LỖI + QUALITY_FLAG | `QLabel` | Kết quả gửi trong gói 0x21 (`CodeQ`) |
+| Chuỗi dữ liệu | `QLabel` font mono, `setWordWrap(True)` | Chuỗi giải mã (chỉ có ở PC, MCU không nhận) |
+| Grade, thời gian, Đạt / Không đạt / Timeout / Trùng mã | `QLabel` | Thống kê ở PC; tổng từ MCU: 30025–30029 |
+| Quy tắc kiểm tra | `QFormLayout` chỉ đọc + nút "Sửa quy tắc" mở trang Cấu hình | GTIN theo recipe, độ dài, grade tối thiểu, phạm vi kiểm tra trùng |
+| Lịch sử đọc mã | `QTableView` + model | **Lưu SQLite**: thời gian, CAN_ID, chuỗi, grade, QUALITY, recipe → truy xuất nguồn gốc |
+
+Hạn trả lời camera 2 là **150 ms**; mục "Thời gian tối đa" ở Cấu hình nên để ~110 ms.
+
 
 ### 2.3. Giám sát (3 tab: `QTabWidget`)
 
