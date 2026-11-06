@@ -198,6 +198,43 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 .modal p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
 .modal .row { justify-content: flex-end; }
 
+/* =============================== An toàn ================================= */
+.safety-chip { height: 30px; padding: 0 12px; border-radius: 15px; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; }
+.safety-chip::before { content: "🛡"; font-size: 13px; }
+.safety-chip.ok { background: rgba(34,197,94,.12); color: var(--ok); border: 1px solid rgba(34,197,94,.5); }
+.safety-chip.bad { background: var(--err); color: #fff; border: 1px solid var(--err); animation: blink 1s steps(2) infinite; }
+.safety-chip.bench { background: #7c2d12; color: #fed7aa; border: 1px solid #ea580c; }
+.bench-banner { display: none; position: absolute; left: 0; right: 0; top: 0; height: 26px; z-index: 5;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff;
+  background: repeating-linear-gradient(45deg, #9a3412 0 14px, #7c2d12 14px 28px); }
+.app.bench .bench-banner { display: flex; }
+.app.bench .page { top: 26px; }
+#mon-safety { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sf-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sf-tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sf-tile { min-height: 74px; border-radius: 8px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line);
+  display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; text-align: left; color: var(--text); }
+.sf-tile small { color: var(--muted); font-size: 11px; }
+.sf-tile b { font-size: 15px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.sf-tile b::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--off); }
+.sf-tile.ok b::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.sf-tile.bad { border-color: var(--err); background: rgba(239,68,68,.12); }
+.sf-tile.bad b { color: #fecaca; }
+.sf-tile.bad b::before { background: var(--err); box-shadow: 0 0 8px var(--err); }
+.sf-tile.act b::before { background: var(--info); box-shadow: 0 0 8px var(--info); }
+.sf-tile.skip { opacity: .55; }
+.sf-tile .src { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.sf-estop-help { display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px; line-height: 1.55;
+  background: rgba(239,68,68,.12); border: 1px solid var(--err); color: #fecaca; font-size: 12px; }
+.sf-estop-help.show { display: block; }
+.bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.bit { border-radius: 6px; background: var(--panel-2); text-align: center; padding: 5px 0 4px; font-size: 10px; color: var(--muted); }
+.bit b { display: block; font-family: var(--mono); font-size: 18px; color: var(--muted); }
+.bit.one b { color: var(--ok); }
+.bit.used { border: 1px solid var(--line); }
+.safety .io.bad { background: rgba(239,68,68,.15); color: #fecaca; }
+
 /* =============================== Trang: Tổng quan ======================== */
 #page-dashboard { grid-template-columns: 290px 1fr; grid-template-rows: 156px 190px 1fr; }
 .ctrl { grid-row: 1 / 3; }

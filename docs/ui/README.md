@@ -123,6 +123,33 @@ Form recipe:
 Sự kiện được ghi khi PC phát hiện thay đổi: trạng thái FSM (30001), bit alarm (30019–20),
 kết quả Vision NG/timeout, mất kết nối.
 
+### 2.7. An toàn (ô trên thanh tiêu đề + tab Giám sát → An toàn)
+
+Dữ liệu: `read_status()` → `estop_ok`, `door_closed`, `air_ok_sw`, `reset_pressed`, `io_bus_ok`,
+`safety_ext_raw` (thanh ghi **30024**), `safety_bench_mode`, `safety_via_li_ext` (30023 bit3, bit4).
+
+| Thành phần | Widget | Hiển thị |
+|---|---|---|
+| Ô an toàn trên thanh tiêu đề | `QLabel` đổi property `state` = ok / bad / bench | "AN TOÀN OK" (xanh), "E-STOP" / "CỬA MỞ" / "THIẾU KHÍ" / "MẤT CÁP LI" (đỏ, nhấp nháy), "BÀN THỬ" (cam) |
+| Băng cảnh báo bàn thử | `QLabel` nền sọc cam phía trên vùng nội dung, `setVisible(status.safety_bench_mode)` | Luôn hiện khi firmware là bản `controller1_bench` |
+| 5 ô tín hiệu | `QFrame` + 2 `QLabel` (tên, trạng thái kèm chữ) | Đèn + chữ: "Đã nhả / ĐANG NHẤN", "Đóng / ĐANG MỞ"… và nguồn (LI mở rộng bit n / GPIO) |
+| KM1, phanh M6 | `QFrame` | Suy ra từ trạng thái máy: KM1 cắt ở E-STOP; "KHÓA TẮT" ở bản bàn thử |
+| Hướng dẫn thoát E-Stop | `QLabel` nền đỏ, chỉ hiện ở E-STOP | Nhả E-Stop → đóng cửa → nhấn **SAFETY_RESET trên tủ** |
+| Byte thô LI mở rộng | `QLabel` hex + 8 ô bit | `safety_ext_raw` (byte cao 30024), dùng khi nghiệm thu đấu dây |
+| Bảng kiểm tra đấu dây | `QTableWidget` 6 dòng | Đánh dấu "◀ hiện tại" ở dòng khớp với tín hiệu đang đọc |
+| Thẻ tóm tắt (tab Trạm & trục) | 6 đèn LED nhỏ | E-Stop, cửa, khí, reset, cáp LI, KM1 |
+
+Quy tắc giao diện (giống firmware, `src/app/machine.c`):
+- Nút RESET trên màn hình (40001 = 4) **không** đưa máy ra khỏi E-STOP; chỉ nút SAFETY_RESET vật lý
+  làm được. Khi người vận hành bấm RESET lúc E-STOP, hiện hướng dẫn thay vì gửi lệnh vô ích.
+- Bật/tắt nút điều khiển theo trạng thái: START chỉ ở READY/PAUSE, HOMING chỉ ở
+  HOMING_REQUIRED/READY/ALARM… (`updateButtons()` trong `app.js`).
+- Giao diện chỉ **hiển thị** an toàn, không bao giờ ghi gì vào chuỗi an toàn. Trong bản mẫu, nhấn vào
+  ô tín hiệu để giả lập; bản PyQt6 không có thao tác này.
+
+Xem thử các chế độ trong bản mẫu: mở `index.html?bench=1` (bản bàn thử) hoặc
+`index.html?src=gpio` (PCB v2, an toàn qua GPIO).
+
 ---
 
 ## 3. Kiến trúc chương trình PyQt6 đề xuất

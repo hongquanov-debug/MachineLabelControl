@@ -27,6 +27,8 @@
     <div class="hdr-item"><small>Recipe</small><b id="hdr-recipe">1 · CAN_330ML_STD</b></div>
     <div class="hdr-item"><small>Tốc độ</small><b><span id="hdr-speed">0</span> lon/ph</b></div>
     <div class="hdr-spacer"></div>
+    <!-- Trạng thái an toàn: thanh ghi 30024 (+ 30023 bit3 chế độ bàn thử) -->
+    <div class="safety-chip ok" id="hdr-safety" title="Trạng thái chuỗi an toàn">AN TOÀN OK</div>
     <div class="links">
       <span class="link"><i class="dot ok" id="lnk-plc"></i>PLC</span>
       <span class="link"><i class="dot ok" id="lnk-cam"></i>Camera</span>
@@ -60,6 +62,8 @@
 
   <!-- ============================== MAIN ================================ -->
   <main class="main">
+    <!-- Chỉ hiện khi firmware là bản controller1_bench (30023 bit3) -->
+    <div class="bench-banner" id="bench-banner">⚠ CHẾ ĐỘ BÀN THỬ – chuỗi an toàn bị BỎ QUA, KM1 bị KHÓA TẮT. Không dùng để vận hành máy.</div>
 
     <!-- ===================== 1. TỔNG QUAN ===================== -->
     <section class="page active" id="page-dashboard">
@@ -183,6 +187,7 @@
         <button class="active" data-sub="mon-stations">Trạm &amp; trục</button>
         <button data-sub="mon-io">Ngõ vào / ra</button>
         <button data-sub="mon-jog">Chạy tay</button>
+        <button data-sub="mon-safety">An toàn</button>
       </div>
 
       <div class="subpage active" id="mon-stations">
@@ -206,7 +211,7 @@
             </table></div>
           </div>
           <div class="card">
-            <h3>An toàn &amp; tiện ích</h3>
+            <h3>An toàn <span class="right mono muted">30024</span></h3>
             <div class="safety" id="safety"></div>
             <h3 style="margin-top:12px">Biến tần băng tải M1</h3>
             <div class="stat-grid">
@@ -216,6 +221,34 @@
               <div class="stat"><small>Truyền thông</small><b class="ok-t" id="vfd-com">Online</b></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Tab An toàn: dùng khi nghiệm thu đấu dây J_SAFETY / LI mở rộng -->
+      <div class="subpage" id="mon-safety">
+        <div class="card">
+          <h3>Chuỗi an toàn <span class="right muted" id="sf-hint">Bản mẫu: nhấn vào ô để giả lập tín hiệu</span></h3>
+          <div class="sf-tiles" id="sf-tiles"></div>
+          <h3 style="margin-top:12px">Nguồn động lực</h3>
+          <div class="sf-tiles two" id="sf-power"></div>
+          <div class="sf-estop-help" id="sf-estop-help">
+            <b>Máy đang ở E-STOP.</b> Để thoát: nhả nút E-Stop → đóng cửa bảo vệ → nhấn nút
+            <b>SAFETY_RESET</b> trên tủ điện → máy chuyển sang “Cần homing”.
+            Nút RESET trên màn hình chỉ xóa alarm, không đưa máy ra khỏi E-Stop.
+          </div>
+        </div>
+        <div class="card">
+          <h3>Mạch LI mở rộng <span class="right mono muted" id="sf-src">PCB v1 · 74HCT165</span></h3>
+          <div class="row" style="justify-content:space-between; margin-bottom:6px">
+            <span class="muted">Giá trị thô (byte cao của 30024)</span>
+            <b class="mono" style="font-size:22px" id="sf-raw">0x07</b>
+          </div>
+          <div class="bits" id="sf-bits"></div>
+          <h3 style="margin-top:12px">Kiểm tra đấu dây</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Thao tác</th><th class="num">Phải đọc ra</th><th></th></tr></thead>
+            <tbody id="sf-check"></tbody>
+          </table></div>
         </div>
       </div>
 

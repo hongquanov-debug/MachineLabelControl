@@ -39,6 +39,7 @@ const ALARMS = {
   6: ["VACUUM_FEED_MISS", "Đầu hút không giữ được tem", "warn"],
   7: ["LABEL_TAPE_EMPTY", "Hết cuộn tem / đứt băng tem", "warn"],
   8: ["CYL_P5_TIMEOUT", "Xi lanh dán P5 quá 150 ms", "err"],
+  20: ["LI32_BUS_DISCONNECT", "Tuột cáp module ngõ vào LI32 / LI mở rộng", "err"],
 };
 
 const S = {
@@ -62,6 +63,11 @@ const S = {
   jogAxis: 0,
   activeRecipe: 1,
   selRecipe: 1,
+  /* Chuỗi an toàn - thanh ghi 30024 (true = an toàn). reset = nút SAFETY_RESET trên tủ */
+  safety: { estop: true, door: true, air: true, reset: false, bus: true },
+  /* Bản mẫu: thêm ?bench=1 hoặc ?src=gpio vào đường dẫn để xem các chế độ khác */
+  bench: new URLSearchParams(location.search).get("bench") === "1",   // 30023 bit3
+  srcLi: new URLSearchParams(location.search).get("src") !== "gpio",  // 30023 bit4
 };
 
 /* ------------------------------------------------------------------------ */
@@ -140,10 +146,13 @@ $$("[data-cmd]").forEach(b => b.addEventListener("click", () => {
       if (["RUN", "PAUSE"].includes(S.state)) setState("READY");
     });
   } else if (c === "reset") {
+    if (S.state === "ESTOP") {
+      // Giống firmware: lệnh 40001 = 4 KHÔNG đưa máy ra khỏi E-Stop
+      return addLog("warn", "HMI", "ALM_01", "Đang E-Stop: nhả nút E-Stop, đóng cửa rồi nhấn SAFETY_RESET trên tủ điện");
+    }
     S.alarms.clear(); renderAlarms();
     addLog("info", "HMI", "", "Xóa alarm (40001 = 4)");
     if (S.state === "ALARM") setState("READY");
-    if (S.state === "ESTOP") setState("HOME_REQ");
   } else if (c === "home") {
     if (["RUN", "PAUSE"].includes(S.state)) return;
     confirmBox("Về gốc toàn máy?", "Nhả P4, nâng P5, xả băng tải 5 giây rồi về gốc các trục M6, M3, M4, M5. Đảm bảo không có người trong vùng máy.", () => {
@@ -425,8 +434,7 @@ function buildMonitor() {
     `<div class="io"><i class="led" id="di${i}"></i><code>${Math.floor(i / 8)}.${i % 8}</code><span>${n}</span></div>`).join("");
   $("#do-grid").innerHTML = DO_NAMES.map((n, i) =>
     `<div class="io"><i class="led" id="do${i}"></i><code>${Math.floor(i / 8)}.${i % 8}</code><span>${n}</span></div>`).join("");
-  $("#safety").innerHTML = [["sf-estop", "E-Stop nhả"], ["sf-door", "Cửa đóng"], ["sf-air", "Khí ≥ 0.5 MPa"], ["sf-km1", "KM1 đóng"], ["sf-brake", "Phanh M6 nhả"], ["sf-li32", "Cáp LI32 OK"]]
-    .map(([id, t]) => `<div class="io"><i class="led on" id="${id}"></i><span>${t}</span></div>`).join("");
+  buildSafety();
   $("#cyl-grid").innerHTML = CYLS.map(([k, t]) =>
     `<div class="cyl"><div class="row"><b>${k}</b><span class="muted">${t}</span></div>` +
     `<div class="row"><span><i class="led" id="cyl-${k}-ext" style="display:inline-block;vertical-align:-2px"></i> Ra</span>` +
@@ -472,9 +480,6 @@ function renderMonitor() {
   }).join("");
 
   // an toàn
-  $("#sf-estop").classList.toggle("on", S.state !== "ESTOP");
-  $("#sf-km1").classList.toggle("on", S.state !== "ESTOP");
-  $("#sf-brake").classList.toggle("on", S.state !== "ESTOP");
   $("#vfd-hz").textContent = (v / 6.24).toFixed(2) + " Hz";
   $("#vfd-a").textContent = (run ? rnd(1.1, 1.3) : 0).toFixed(1) + " A";
 
@@ -524,6 +529,153 @@ $("#jog-enter").addEventListener("click", () => {
   else if (S.state === "READY") { setState("JOG"); $("#jog-enter").textContent = "Thoát chế độ chạy tay"; }
   else addLog("warn", "HMI", "", "Chỉ vào chạy tay khi máy READY");
 });
+
+/* ------------------------------------------------------------------------ */
+/* An toàn  (PyQt6: đọc status.estop_ok, door_closed, air_ok_sw, reset_pressed,  */
+/* io_bus_ok, safety_ext_raw (30024) và safety_bench_mode (30023 bit3))       */
+/* ------------------------------------------------------------------------ */
+const SF = [   // khóa, tên, chữ khi an toàn, chữ khi không an toàn, bit LI mở rộng, tên ngắn
+  ["estop", "Nút dừng khẩn cấp", "Đã nhả", "ĐANG NHẤN", 0, "E-Stop nhả"],
+  ["door", "Cửa bảo vệ", "Đóng", "ĐANG MỞ", 1, "Cửa đóng"],
+  ["air", "Áp suất khí nén", "≥ 0.5 MPa", "THIẾU KHÍ", 2, "Đủ khí nén"],
+  ["reset", "Nút SAFETY_RESET", "Không nhấn", "ĐANG NHẤN", 3, "Nút Reset"],
+  ["bus", "Cáp module LI", "Kết nối tốt", "MẤT KẾT NỐI", -1, "Cáp LI"],
+];
+
+/** Giá trị firmware đọc được: mất cáp LI thì mọi tín hiệu bị coi là KHÔNG an toàn. */
+function sfRead() {
+  const s = S.safety;
+  if (S.bench) return { estop: true, door: true, air: true, reset: false, bus: s.bus };
+  const failAll = S.srcLi && !s.bus;
+  return { estop: s.estop && !failAll, door: s.door && !failAll, air: s.air && !failAll, reset: s.reset && !failAll, bus: s.bus };
+}
+function sfRaw() {
+  const s = S.safety;
+  if (!S.srcLi) return 0;
+  if (!s.bus) return 0xFF;
+  return (s.estop ? 1 : 0) | (s.door ? 2 : 0) | (s.air ? 4 : 0) | (s.reset ? 8 : 0);
+}
+const km1On = () => !S.bench && S.state !== "ESTOP" && S.state !== "POWER_ON";
+
+function buildSafety() {
+  $("#sf-tiles").innerHTML = SF.map(([k, name]) =>
+    `<button class="sf-tile" data-sf="${k}"><small>${name}</small><b id="sft-${k}">–</b><span class="src" id="sfs-${k}"></span></button>`).join("");
+  $("#sf-power").innerHTML =
+    `<div class="sf-tile" style="cursor:default"><small>Contactor KM1 (nguồn động lực)</small><b id="sft-km1">–</b><span class="src">GPIO PC4</span></div>` +
+    `<div class="sf-tile" style="cursor:default"><small>Phanh trục nâng M6</small><b id="sft-brake">–</b><span class="src">GPIO PC5</span></div>`;
+  const names = ["E-Stop", "Cửa", "Khí", "Reset", "–", "–", "–", "–"];
+  $("#sf-bits").innerHTML = names.map((n, i) =>
+    `<div class="bit ${i < 4 ? "used" : ""}" id="sfb-${i}"><b>0</b>b${i} ${n}</div>`).reverse().join("");
+  $("#sf-check").innerHTML = [
+    ["Bình thường (nhả E-Stop, đóng cửa, đủ khí)", "0x07"],
+    ["Nhấn E-Stop", "0x06"],
+    ["Mở cửa bảo vệ", "0x05"],
+    ["Khóa van khí", "0x03"],
+    ["Giữ nút SAFETY_RESET", "0x0F"],
+    ["Rút cáp LI", "Bus --"],
+  ].map(([t, v], i) => `<tr><td>${t}</td><td class="num">${v}</td><td id="sfc-${i}"></td></tr>`).join("");
+  $("#safety").innerHTML = SF.map(([k, , , , , short]) =>
+    `<div class="io" id="sfm-${k}"><i class="led"></i><span>${short}</span></div>`).join("") +
+    `<div class="io" id="sfm-km1"><i class="led"></i><span>KM1 đóng</span></div>`;
+
+  // Bản mẫu: nhấn ô để giả lập tín hiệu (bản PyQt6 chỉ hiển thị, không có thao tác này)
+  $("#sf-tiles").addEventListener("click", e => {
+    const t = e.target.closest("[data-sf]"); if (!t) return;
+    if (S.bench) return addLog("warn", "Safety", "", "Chế độ bàn thử: chuỗi an toàn bị bỏ qua");
+    const k = t.dataset.sf;
+    if (k === "reset") {             // nút nhấn nhả: giữ 1 giây
+      S.safety.reset = true;
+      setTimeout(() => { S.safety.reset = false; }, 1000);
+    } else {
+      S.safety[k] = !S.safety[k];
+    }
+  });
+}
+
+/** Phản ứng của firmware với chuỗi an toàn (giả lập io.c + machine.c). */
+function simSafety() {
+  const r = sfRead();
+  const moving = ["RUN", "PAUSE", "HOMING", "JOG"].includes(S.state);
+  if (!r.bus) raiseAlarm(20);
+  if (!r.estop) {
+    raiseAlarm(1);
+    if (S.state !== "ESTOP") { S.cans = []; setState("ESTOP"); }
+  }
+  if (!r.door) {
+    raiseAlarm(2);
+    if (moving) { S.cans = []; setState("ESTOP"); }
+  } else if (!moving && S.state !== "ESTOP" && S.alarms.has(2)) {
+    S.alarms.delete(2);              // cửa đóng lại khi máy đứng yên: tự xóa
+    renderAlarms();
+  }
+  if (!r.air) raiseAlarm(3);
+  // Thoát E-Stop: E-Stop nhả + cửa đóng + nhấn SAFETY_RESET (nút vật lý trên tủ)
+  if (S.state === "ESTOP" && r.estop && r.door && r.reset) {
+    S.alarms.clear();
+    renderAlarms();
+    addLog("info", "Safety", "", "SAFETY_RESET – thoát E-Stop, cần homing lại");
+    setState("HOME_REQ");
+  }
+}
+
+function renderSafety() {
+  const r = sfRead();
+  // ô trên thanh tiêu đề
+  const chip = $("#hdr-safety");
+  const bad = !r.bus ? "MẤT CÁP LI" : !r.estop ? "E-STOP" : !r.door ? "CỬA MỞ" : !r.air ? "THIẾU KHÍ" : "";
+  chip.className = "safety-chip " + (S.bench ? "bench" : bad ? "bad" : "ok");
+  chip.textContent = S.bench ? "BÀN THỬ" : (bad || "AN TOÀN OK");
+  $("#app").classList.toggle("bench", S.bench);
+
+  // thẻ tóm tắt (tab Trạm & trục)
+  for (const [k] of SF) {
+    const el = $("#sfm-" + k);
+    const ok = k === "reset" ? true : r[k];
+    el.classList.toggle("bad", !ok);
+    $(".led", el).className = "led " + (k === "reset" ? (r.reset ? "on" : "") : (ok ? "on" : "on red"));
+  }
+  $("#sfm-km1 .led").classList.toggle("on", km1On());
+
+  // tab An toàn
+  for (const [k, , txtOk, txtBad, bit] of SF) {
+    const t = $(`[data-sf="${k}"]`);
+    const ok = r[k];
+    const skip = S.bench && k !== "bus";
+    t.className = "sf-tile " + (skip ? "skip" : k === "reset" ? (ok ? "act" : "ok") : (ok ? "ok" : "bad"));
+    $("#sft-" + k).textContent = skip ? "BỎ QUA" : k === "reset" ? (ok ? "ĐANG NHẤN" : txtOk) : (ok ? txtOk : txtBad);
+    $("#sfs-" + k).textContent = bit < 0 ? "30024 bit4" : (S.srcLi ? `LI mở rộng · bit ${bit}` : "GPIO PC" + bit);
+  }
+  const km = km1On();
+  $("#sft-km1").textContent = S.bench ? "KHÓA TẮT" : (km ? "Đóng" : "Cắt");
+  $("#sft-km1").parentElement.className = "sf-tile " + (km ? "ok" : "bad");
+  $("#sft-brake").textContent = km ? "Nhả" : "Đóng phanh";
+  $("#sft-brake").parentElement.className = "sf-tile " + (km ? "ok" : "act");
+  $("#sf-estop-help").classList.toggle("show", S.state === "ESTOP");
+  $("#sf-hint").textContent = S.bench ? "Firmware bản bàn thử" : "Bản mẫu: nhấn vào ô để giả lập tín hiệu";
+
+  // byte thô của IC LI mở rộng
+  const raw = sfRaw();
+  $("#sf-src").textContent = S.srcLi ? "PCB v1 · 74HCT165" : "PCB v2 · GPIO";
+  $("#sf-raw").textContent = S.srcLi ? "0x" + raw.toString(16).toUpperCase().padStart(2, "0") : "—";
+  for (let i = 0; i < 8; i++) {
+    const one = S.srcLi && ((raw >> i) & 1) === 1;
+    const b = $("#sfb-" + i);
+    b.classList.toggle("one", one);
+    $("b", b).textContent = S.srcLi ? (one ? "1" : "0") : "–";
+  }
+  const s = S.safety;
+  const now_ = [s.estop && s.door && s.air && !s.reset && s.bus, !s.estop, !s.door, !s.air, s.reset, !s.bus];
+  now_.forEach((on, i) => { $("#sfc-" + i).innerHTML = on ? '<span class="tag info">◀ hiện tại</span>' : ""; });
+}
+
+/** Bật/tắt nút điều khiển theo trạng thái máy (PyQt6: QPushButton.setEnabled) */
+function updateButtons() {
+  const en = {
+    start: ["READY", "PAUSE"], pause: ["RUN"], stop: ["RUN", "PAUSE"],
+    reset: ["READY", "ALARM", "HOME_REQ", "ESTOP", "PAUSE", "RUN"], home: ["HOME_REQ", "READY", "ALARM"],
+  };
+  $$("[data-cmd]").forEach(b => { b.disabled = !en[b.dataset.cmd].includes(S.state); });
+}
 
 /* ------------------------------------------------------------------------ */
 /* Trang Cấu hình - Recipe  (PyQt6: plc.read_recipe / plc.save_recipe)       */
@@ -690,6 +842,9 @@ let last = performance.now();
 setInterval(() => {
   const t = performance.now(), dt = (t - last) / 1000; last = t;
   simStep(dt);
+  simSafety();
+  renderSafety();
+  updateButtons();
   renderConveyor();
   renderDashboard();
   renderHeader();
@@ -700,4 +855,4 @@ setInterval(() => {
 setInterval(renderClock, 1000);
 
 // Bản mẫu tự chạy sau 1 giây để thấy dữ liệu chuyển động (xóa khi dùng thật)
-setTimeout(() => setState("RUN"), 1000);
+setTimeout(() => setState(S.bench ? "HOME_REQ" : "RUN"), 1000);
