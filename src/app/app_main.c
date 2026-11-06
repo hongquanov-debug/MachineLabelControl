@@ -25,6 +25,7 @@
 #include "homing.h"
 #include "io.h"
 #include "machine.h"
+#include "modbus_regs.h"
 #include "motion.h"
 #include "net_link.h"
 #include "params.h"
@@ -73,6 +74,7 @@ static void init_task(void *arg)
     motion_init();
     bsp_encoder_init();
     machine_init();
+    modbus_regs_init();
     vision_init();
     hmi_link_init();
     vfd_init();

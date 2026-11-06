@@ -27,6 +27,7 @@ nạp lên máy thật. Tìm nhanh trong code bằng từ khóa `TODO(HW)`.
 | A15 | §3.1 | Trạm 240° "thổi khí vệ sinh" nhưng không có van riêng trong bảng DO. | Chỉ tắt hút chân không đầu ở 240°. Cần bổ sung van nếu muốn thổi vệ sinh. |
 | A16 | §1.2 | Lon bị P3 chặn lại tại trạm chỉnh góc nên vị trí theo encoder không còn đúng. | Đánh dấu `CAN_FLAG_HOLD` trong lúc giữ; khi nhả, gán lại tọa độ lon = 300 mm (re-anchor). Lưu ý cơ khí: lon phía sau có thể dồn vào lon đang bị giữ. |
 | A17 | §7.2 | Không có tỉ lệ tốc độ băng tải ↔ tần số biến tần. | `BELT_MM_S_PER_HZ = 6.24` (50 Hz ↔ 312 mm/s) – **cần đo thực tế**. |
+| A19 | §7.3 | Spec chưa định nghĩa cách PC nạp từng trường recipe. | Thêm vùng "recipe editor" 40021..40041 (bộ đệm sửa + lệnh LOAD/SAVE/SAVE_ACTIVATE). Hệ số M2 do MCU tự tính từ đường kính; không cho sửa recipe đang dùng khi máy chạy. Input 30023 = cờ cấu hình. |
 | A18 | §6.3 ALM_02 | "Cửa mở trong lúc chạy" – không rõ khi máy đứng yên. | Cửa mở khi đang có chuyển động → `STATE_ESTOP`. Khi đứng yên: chỉ cấm START/HOME, tự xóa khi đóng cửa. |
 
 ## B. Giả định phần cứng cần kiểm tra (TODO(HW))

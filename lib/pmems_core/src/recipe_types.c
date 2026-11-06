@@ -71,6 +71,8 @@ void recipe_factory_default(uint8_t id, uint16_t m6_ref_330_x10, CanRecipe_t *ou
 bool recipe_check_ranges(const CanRecipe_t *r)
 {
     return r->recipe_id >= 1U && r->recipe_id <= 16U &&
+           r->can_diameter_x10 >= 300U && r->can_diameter_x10 <= 1200U &&   /* 30..120 mm */
+           r->can_height_x10 >= 500U && r->can_height_x10 <= 2500U &&       /* 50..250 mm */
            r->tab_to_label_offset >= -18000 && r->tab_to_label_offset <= 18000 &&
            r->m6_height_pos_x10 <= 980U &&
            r->m2_angle_scale_x1000 >= 100U && r->m2_angle_scale_x1000 <= 2000U &&

@@ -29,6 +29,7 @@ static TickType_t s_state_since, s_s0_empty_since;
 static uint16_t s_last_speed;
 static TrackingCounters_t s_cnt_at_start;
 static IWDG_HandleTypeDef s_iwdg;
+static volatile bool s_apply_req;
 
 /* ------------------------------------------------------------------------ */
 void machine_init(void)
@@ -47,6 +48,22 @@ void machine_post_cmd(MachineCmd_t cmd)
 MachineState_t machine_state(void) { return s_state; }
 bool machine_abort_requested(void) { return s_abort; }
 void machine_homing_done(bool ok)  { s_homing_result = ok ? 1 : 0; }
+void machine_request_recipe_apply(void) { s_apply_req = true; }
+bool machine_recipe_applying(void) { return s_apply_req || motion_busy(AXIS_M6); }
+
+/* READY only: start the (non-blocking) M6 move to the recipe height */
+static void apply_recipe_if_requested(void)
+{
+    if (!s_apply_req || s_need_home || !motion_enabled() || motion_busy(AXIS_M6)) {
+        return;
+    }
+    CanRecipe_t r;
+    recipe_get_active(&r);
+    if (!motion_move_abs(AXIS_M6, (float)r.m6_height_pos_x10 / 10.0f, 1.0f)) {
+        alarm_raise(ALM_16_HOMING_FAILED);   /* target outside soft limits */
+    }
+    s_apply_req = false;
+}
 
 bool machine_recipe_change_allowed(void)
 {
@@ -289,6 +306,7 @@ static void fsm_step(MachineCmd_t cmd)
             enter(MS_ALARM_STOP);
         } else if (s_homing_result == 1) {
             s_need_home = false;
+            s_apply_req = false;     /* homing already moved M6 to the recipe height */
             enter(MS_READY);
         } else if (s_homing_result == 0) {
             enter(MS_ALARM_STOP);
@@ -296,7 +314,8 @@ static void fsm_step(MachineCmd_t cmd)
         break;
 
     case MS_READY:
-        if (cmd == CMD_START && sev < ALM_SEV_DRAIN_STOP && sf.door_closed) {
+        apply_recipe_if_requested();
+        if (cmd == CMD_START && sev < ALM_SEV_DRAIN_STOP && sf.door_closed && !machine_recipe_applying()) {
             enter(MS_AUTO_RUN);
         } else if (cmd == CMD_JOG_ENTER) {
             enter(MS_MANUAL_JOG);

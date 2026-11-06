@@ -84,6 +84,37 @@ bool recipe_select(uint8_t id)
     return true;
 }
 
+bool recipe_load(uint8_t id, CanRecipe_t *out)
+{
+    if (id < 1U || id > RECIPE_COUNT) {
+        return false;
+    }
+    if (id == s_active.recipe_id) {
+        recipe_get_active(out);    /* RAM copy may hold unsaved HMI edits */
+        return true;
+    }
+    return load_recipe(id, out);
+}
+
+RecipeStoreResult_t recipe_store(const CanRecipe_t *r, bool *active_changed)
+{
+    CanRecipe_t c = *r;
+    recipe_seal(&c);
+    *active_changed = false;
+    if (!recipe_check_ranges(&c)) {
+        return RECIPE_STORE_RANGE;
+    }
+    xSemaphoreTake(s_mutex, portMAX_DELAY);
+    if (c.recipe_id == s_active.recipe_id) {
+        s_active = c;
+        s_recipe_dirty = false;
+        *active_changed = true;
+    }
+    xSemaphoreGive(s_mutex);
+    bool ok = s_eeprom_ok && bsp_eeprom_write(recipe_addr(c.recipe_id), &c, sizeof(c));
+    return ok ? RECIPE_STORE_OK : RECIPE_STORE_EEPROM;
+}
+
 bool recipe_update_active(const CanRecipe_t *r)
 {
     if (!recipe_check_ranges(r) || r->recipe_id != s_active.recipe_id) {

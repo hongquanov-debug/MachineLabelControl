@@ -9,6 +9,7 @@
 #include "modbus_pdu.h"
 #include "orient_math.h"
 #include "pulse_ramp.h"
+#include "recipe_regs.h"
 #include "recipe_types.h"
 #include "vision_proto.h"
 
@@ -243,6 +244,49 @@ static void test_recipe_defaults_and_crc(void)
     TEST_ASSERT_EQUAL(64, sizeof(CanRecipe_t));
 }
 
+/* ---------------- Recipe <-> Modbus registers (PC config tool) ---------------- */
+static void test_recipe_regs_layout_vector(void)
+{
+    /* Same vector is checked by tools/pc_config/tests/test_registers.py */
+    CanRecipe_t r;
+    recipe_factory_default(3, 300, &r);       /* CAN_330ML_SLK, D=58.0, H=145.0 */
+    r.tab_to_label_offset = -1250;
+    uint16_t regs[RCP_REG_DATA_COUNT];
+    recipe_to_regs(&r, regs);
+    TEST_ASSERT_EQUAL_UINT16(3, regs[0]);
+    TEST_ASSERT_EQUAL_HEX16(0x4341, regs[1]);  /* "CA" */
+    TEST_ASSERT_EQUAL_HEX16(0x4E5F, regs[2]);  /* "N_" */
+    TEST_ASSERT_EQUAL_HEX16(0x4B00, regs[7]);  /* "K\0" */
+    TEST_ASSERT_EQUAL_HEX16(0x0000, regs[8]);
+    TEST_ASSERT_EQUAL_UINT16(580, regs[RCP_REG_DIAMETER - RCP_REG_FIRST]);
+    TEST_ASSERT_EQUAL_HEX16(0xFB1E, regs[RCP_REG_TAB_OFFSET - RCP_REG_FIRST]); /* -1250 */
+    TEST_ASSERT_EQUAL_UINT16(611, regs[RCP_REG_M2_SCALE - RCP_REG_FIRST]);
+    TEST_ASSERT_EQUAL_UINT16(598, regs[RCP_REG_M6_POS - RCP_REG_FIRST]);
+}
+
+static void test_recipe_regs_roundtrip_and_scale(void)
+{
+    TEST_ASSERT_EQUAL_UINT16(695, recipe_scale_from_diameter(660, PU_WHEEL_DIAMETER_X10));
+    TEST_ASSERT_EQUAL_UINT16(611, recipe_scale_from_diameter(580, PU_WHEEL_DIAMETER_X10));
+
+    CanRecipe_t a, b;
+    recipe_factory_default(1, 300, &a);
+    uint16_t regs[RCP_REG_DATA_COUNT];
+    recipe_to_regs(&a, regs);
+    regs[RCP_REG_DIAMETER - RCP_REG_FIRST] = 530;   /* PC changes the diameter only */
+    regs[RCP_REG_M2_SCALE - RCP_REG_FIRST] = 9999;  /* read-only: must be ignored */
+    for (int i = 1; i <= 8; i++) {
+        regs[i] = 0x4141;                             /* 16 x 'A', no terminator */
+    }
+    recipe_from_regs(regs, PU_WHEEL_DIAMETER_X10, &b);
+    TEST_ASSERT_TRUE(recipe_valid(&b));
+    TEST_ASSERT_EQUAL_UINT16(558, b.m2_angle_scale_x1000);      /* 53.0 / 95 */
+    TEST_ASSERT_EQUAL(15, strlen(b.can_name));                  /* forced NUL */
+    TEST_ASSERT_EQUAL_UINT16(a.can_height_x10, b.can_height_x10);
+    b.can_diameter_x10 = 200;                                   /* 20 mm: out of range */
+    TEST_ASSERT_FALSE(recipe_check_ranges(&b));
+}
+
 int main(int argc, char **argv)
 {
     (void)argc;
@@ -262,5 +306,7 @@ int main(int argc, char **argv)
     RUN_TEST(test_ramp_profile_m3_index);
     RUN_TEST(test_orient_math);
     RUN_TEST(test_recipe_defaults_and_crc);
+    RUN_TEST(test_recipe_regs_layout_vector);
+    RUN_TEST(test_recipe_regs_roundtrip_and_scale);
     return UNITY_END();
 }

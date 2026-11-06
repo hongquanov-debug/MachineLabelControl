@@ -7,3 +7,5 @@
 *.elf
 *.bin
 *.map
+__pycache__/
+*.pyc

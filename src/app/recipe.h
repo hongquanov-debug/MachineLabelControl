@@ -20,6 +20,17 @@ uint8_t recipe_active_id(void);
 /** Select and load recipe @p id (1..16), persisted as last active. */
 bool recipe_select(uint8_t id);
 
+/** Read recipe @p id (EEPROM, or factory default if blank/corrupt). false if defaulted. */
+bool recipe_load(uint8_t id, CanRecipe_t *out);
+
+/**
+ * Validate, seal and write a recipe to EEPROM immediately. If it is the active
+ * recipe the RAM copy is updated too (@p active_changed = true).
+ * Returns false on range error (nothing changed) or EEPROM error (RAM updated).
+ */
+typedef enum { RECIPE_STORE_OK = 0, RECIPE_STORE_RANGE, RECIPE_STORE_EEPROM } RecipeStoreResult_t;
+RecipeStoreResult_t recipe_store(const CanRecipe_t *r, bool *active_changed);
+
 /** Modify the active recipe in RAM (validated); persisted by recipe_service(). */
 bool recipe_update_active(const CanRecipe_t *r);
 

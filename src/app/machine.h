@@ -52,5 +52,9 @@ HmiState_t     machine_state_hmi(void);
 bool           machine_recipe_change_allowed(void);
 bool           machine_abort_requested(void);
 void           machine_homing_done(bool ok);
+/** Active recipe changed: move M6 to the new height when the machine is READY and homed. */
+void           machine_request_recipe_apply(void);
+/** M6 move to recipe height in progress (START is held off). */
+bool           machine_recipe_applying(void);
 
 #endif /* MACHINE_H */
