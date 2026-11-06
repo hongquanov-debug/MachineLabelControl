@@ -230,7 +230,7 @@ function codeResult(c) {
   const r = Math.random();
   const q = r < 0.010 ? "NO_CODE" : r < 0.022 ? "UNREADABLE" : r < 0.027 ? "DUPLICATE" : r < 0.032 ? "LOW_GRADE" : r < 0.036 ? "TIMEOUT" : "OK";
   const serial = (S.serial++).toString(36).toUpperCase().padStart(8, "0");
-  const data = q === "NO_CODE" || q === "UNREADABLE" || q === "TIMEOUT" ? null : `(01)08935049501234(21)${serial}(17)271231(10)L2611`;
+  const data = q === "NO_CODE" || q === "UNREADABLE" || q === "TIMEOUT" ? null : `(01)08935049501237(21)${serial}(17)271231(10)L2611`;
   const grade = data ? (q === "LOW_GRADE" ? 1 : 2 + Math.floor(Math.random() * 3)) : null;
   const res = { id: c.id, q, data, grade, proc: q === "TIMEOUT" ? 150 : rnd(28, 75), t: now(), seed: S.serial };
   S.codeLast = res;

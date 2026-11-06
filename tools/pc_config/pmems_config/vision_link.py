@@ -74,8 +74,8 @@ def result_cam1(can_id: int, theta_deg: float, ok: bool = True, quality: VisionQ
     return _frame12(CMD_RESULT_CAM1, can_id, th & 0xFF, th >> 8, q)
 
 
-def result_cam2(can_id: int, quality: CodeQ, grade: int = 0, data_len: int = 0) -> bytes:
-    """Camera 2 result (0x21): grade = ISO/IEC 15415 (4=A .. 0=F), data_len = decoded length."""
+def result_cam2(can_id: int, quality: CodeQ, grade: int = 0xFF, data_len: int = 0) -> bytes:
+    """Camera 2 result (0x21): grade 4=A .. 0=F (0xFF = not measured), data_len = decoded length."""
     return _frame12(CMD_RESULT_CAM2, can_id, grade, min(data_len, 255), quality)
 
 

@@ -153,7 +153,7 @@
           <div class="result-big"><b id="dm-result">–</b><span class="tag ok" id="dm-q">–</span></div>
           <div class="dm-data" id="dm-data">–</div>
           <div class="stat-grid" style="margin-top:8px">
-            <div class="stat"><small>Chất lượng in (grade)</small><b id="dm-grade">–</b></div>
+            <div class="stat"><small>Grade tương phản</small><b id="dm-grade">–</b></div>
             <div class="stat"><small>Thời gian xử lý</small><b id="dm-proc">– ms</b></div>
             <div class="stat"><small>Đọc đạt</small><b class="ok-t" id="dm-ok">0</b></div>
             <div class="stat"><small>Không đạt</small><b class="err-t" id="dm-ng">0</b></div>
@@ -165,9 +165,9 @@
           <h3>Quy tắc kiểm tra mã</h3>
           <div class="rule-list">
             <div><span>Định dạng</span><b>GS1 DataMatrix</b></div>
-            <div><span>GTIN (01) theo recipe</span><b class="mono">08935049501234</b></div>
+            <div><span>GTIN (01) theo recipe</span><b class="mono">08935049501237</b></div>
             <div><span>Độ dài dữ liệu</span><b>30 – 48 ký tự</b></div>
-            <div><span>Grade tối thiểu</span><b>C</b></div>
+            <div><span>Grade tương phản tối thiểu</span><b>C</b></div>
             <div><span>Kiểm tra trùng serial (21)</span><b>Trong ca</b></div>
           </div>
           <div class="cam-btns">
@@ -378,14 +378,14 @@
           <div class="field"><label>Độ phân giải</label><div class="inp"><select><option>1280 × 960</option><option>640 × 480</option></select></div></div>
         </div></div>
         <div class="card"><h3>Camera 2 · Mã DataMatrix <span class="right mono muted">+1050 mm</span></h3><div class="cfg-form">
-          <div class="field"><label>Camera / đầu đọc</label><div class="inp"><select><option>MV-CS050-10GM (192.168.2.11)</option><option>Đầu đọc mã ID (tự giải mã)</option></select></div></div>
+          <div class="field"><label>Camera / đầu đọc</label><div class="inp"><select><option>MV-CS050-10GM (192.168.2.11)</option></select></div></div>
           <div class="field"><label>Chế độ kích</label><div class="inp"><select><option>Phần cứng (CAM2_TRIG PD15)</option><option>Phần mềm</option></select></div></div>
           <div class="field"><label>Phơi sáng</label><div class="inp"><input type="number" value="80"><span class="unit">µs</span></div></div>
-          <div class="field"><label>Thư viện giải mã</label><div class="inp"><select><option>zxing-cpp</option><option>pylibdmtx</option><option>Đầu đọc tự giải mã</option></select></div></div>
+          <div class="field"><label>Thư viện giải mã</label><div class="inp"><select><option>zxing-cpp</option><option>pylibdmtx</option></select></div></div>
           <div class="field"><label>Định dạng</label><div class="inp"><select><option>GS1 DataMatrix</option><option>Chuỗi tự do</option></select></div></div>
-          <div class="field"><label>GTIN (01) yêu cầu</label><div class="inp"><input value="08935049501234"></div><span class="hint">lấy theo recipe</span></div>
+          <div class="field"><label>GTIN (01) yêu cầu</label><div class="inp"><input value="08935049501237"></div><span class="hint">lấy theo recipe</span></div>
           <div class="field"><label>Độ dài dữ liệu</label><div class="inp"><input value="30 – 48"><span class="unit">ký tự</span></div></div>
-          <div class="field"><label>Grade tối thiểu</label><div class="inp"><select><option>C</option><option>B</option><option>D</option></select></div><span class="hint">thấp hơn → LOW_GRADE</span></div>
+          <div class="field"><label>Grade tối thiểu</label><div class="inp"><select><option>C</option><option>B</option><option>D</option></select></div><span class="hint">theo độ tương phản; thấp hơn → LOW_GRADE</span></div>
           <div class="field"><label>Kiểm tra trùng serial</label><div class="inp"><select><option>Trong ca</option><option>Trong ngày</option><option>Toàn bộ CSDL</option><option>Tắt</option></select></div></div>
           <div class="field"><label>Thời gian tối đa</label><div class="inp"><input type="number" value="110"><span class="unit">ms</span></div><span class="hint">MCU chờ 150 ms</span></div>
         </div></div>

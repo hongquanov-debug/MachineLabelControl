@@ -1,1 +1,5 @@
-pymodbus>=3.6
+pymodbus>=3.6        # Modbus TCP (cấu hình, trạng thái)
+pyserial>=3.5        # RS485_3 (gói Vision)
+zxing-cpp>=2.2       # giải mã DataMatrix (camera 2)
+numpy>=1.24
+pillow>=10           # chỉ cần cho test (tạo ảnh mã)

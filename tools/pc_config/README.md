@@ -1,4 +1,6 @@
-# pmems_config – Cấu hình PMeMS Controller 1 từ PC qua Ethernet
+# pmems_config – Thư viện PC cho PMeMS Controller 1
+
+Gồm 2 phần: **cấu hình / giám sát qua Ethernet** (Modbus TCP) và **xử lý camera** (giao thức RS485_3, đọc mã DataMatrix camera 2 – xem `docs/VISION_PROTOCOL.md` mục 5).
 
 Thư viện + công cụ dòng lệnh Python cho PC Vision. Kết nối tới bộ điều khiển STM32 bằng
 **Modbus TCP** (W5500, cổng 502, IP mặc định `192.168.1.200`).
