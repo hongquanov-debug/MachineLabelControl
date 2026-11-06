@@ -225,6 +225,11 @@ static uint8_t rd_input(void *ctx, uint16_t a, uint16_t *v)
     case 19: *v = (uint16_t)am; break;
     case 20: *v = (uint16_t)vis.crc_errors; break;
     case 21: *v = (uint16_t)vis.rx_late; break;
+    case 24: *v = (uint16_t)(vis.code_ok >> 16); break;   /* 30025..26 DataMatrix OK */
+    case 25: *v = (uint16_t)vis.code_ok; break;
+    case 26: *v = (uint16_t)(vis.code_ng >> 16); break;   /* 30027..28 DataMatrix NG */
+    case 27: *v = (uint16_t)vis.code_ng; break;
+    case 28: *v = (uint16_t)(((uint16_t)vis.code_last_grade << 8) | vis.code_last_q); break;  /* 30029 */
     case 23: {   /* safety diagnostics for wiring check */
         SafetyStatus_t sf = io_safety();
         *v = (uint16_t)((sf.estop_ok ? 1U : 0U) | (sf.door_closed ? 2U : 0U) | (sf.air_ok ? 4U : 0U) |

@@ -27,6 +27,7 @@
 #include "crit.h"
 #include "io.h"
 #include "task.h"
+#include "vision_proto.h"
 
 static CanFifo_t s_fifo;
 static volatile bool s_enabled;
@@ -34,6 +35,8 @@ static uint16_t s_next_id = 1;
 static uint32_t s_last_s2_enc;
 static bool s_have_last_s2;
 static volatile uint8_t s_consec_vision_tmo;
+static volatile uint8_t s_consec_code_tmo;   /* camera 2 timeouts in a row (ALM_09) */
+static volatile uint8_t s_consec_code_ng;    /* camera 2 NG results in a row (ALM_21) */
 
 static QueueHandle_t s_q_trig, s_q_orient, s_q_label;
 static volatile TrackingCounters_t s_cnt;
@@ -49,7 +52,7 @@ static volatile uint16_t s_p8_timer_ms;
 void tracking_init(void)
 {
     can_fifo_clear(&s_fifo);
-    s_q_trig   = xQueueCreate(8, sizeof(uint16_t));
+    s_q_trig   = xQueueCreate(8, sizeof(VisionTrigReq_t));
     s_q_orient = xQueueCreate(4, sizeof(StationEvent_t));
     s_q_label  = xQueueCreate(4, sizeof(StationEvent_t));
     configASSERT(s_q_trig && s_q_orient && s_q_label);
@@ -67,6 +70,8 @@ void tracking_clear(void)
     can_fifo_clear(&s_fifo);
     s_have_last_s2 = false;
     s_consec_vision_tmo = 0;
+    s_consec_code_tmo = 0;
+    s_consec_code_ng = 0;
     crit_exit(s);
     xQueueReset(s_q_trig);
     xQueueReset(s_q_orient);
@@ -121,6 +126,16 @@ TrackingCounters_t tracking_counters(void)
 
 void tracking_vision_result_ok(void) { s_consec_vision_tmo = 0; }
 
+void tracking_code_result(bool ok)
+{
+    s_consec_code_tmo = 0;
+    if (ok) {
+        s_consec_code_ng = 0;
+    } else if (++s_consec_code_ng >= CODE_MAX_CONSEC_NG) {
+        alarm_raise(ALM_21_CODE_NG_REPEATED);
+    }
+}
+
 /* ------------------------------------------------------------------------ */
 /* EXTI2 - S2 can sensor                                                    */
 /* ------------------------------------------------------------------------ */
@@ -161,7 +176,8 @@ static void ev_camera(CanRecord_t *r, TickType_t now, BaseType_t *woken)
     r->timestamp_trig = now;
     r->station_idx    = STATION_IDX_ORIENT;
 #if VISION_SEND_TRIGGER_PACKET
-    xQueueSendFromISR(s_q_trig, &r->can_id, woken);
+    VisionTrigReq_t q = {r->can_id, VISION_CMD_TRIGGER};
+    xQueueSendFromISR(s_q_trig, &q, woken);
 #else
     (void)woken;
 #endif
@@ -176,6 +192,19 @@ static void vision_timeout_check(CanRecord_t *r, TickType_t now)
         r->flags |= CAN_FLAG_VISION_TMO;
         if (++s_consec_vision_tmo >= VISION_MAX_CONSEC_TIMEOUT) {
             alarm_raise(ALM_05_VISION_TIMEOUT);
+        }
+    }
+}
+
+/* Camera 2 result window (DataMatrix) */
+static void code_timeout_check(CanRecord_t *r, TickType_t now)
+{
+    if (r->status == CAN_STATUS_CODE_WAIT &&
+        (now - r->timestamp_trig) > pdMS_TO_TICKS(CODE_TIMEOUT_MS)) {
+        r->status = CAN_ERROR_CODE_NG;
+        r->flags |= CAN_FLAG_CODE_TMO;
+        if (++s_consec_code_tmo >= CODE_MAX_CONSEC_TIMEOUT) {
+            alarm_raise(ALM_09_CODE_CAM_TIMEOUT);
         }
     }
 }
@@ -211,16 +240,37 @@ static void ev_label(CanRecord_t *r, TickType_t now, BaseType_t *woken)
 
 static void ev_inspect(CanRecord_t *r)
 {
-    r->station_idx = STATION_IDX_REJECT;
+    r->station_idx = CODE_CHECK_ENABLE ? STATION_IDX_CODE : STATION_IDX_REJECT;
     if (r->status == CAN_STATUS_LABELED) {
+#if LABEL_S5_CHECK_ENABLE
         r->status = bsp_s5_label_present() ? CAN_STATUS_INSPECTED : CAN_ERROR_LABEL_MISS;
+#else
+        r->status = CAN_STATUS_INSPECTED;   /* camera 2 alone verifies the label */
+#endif
     }
+}
+
+/* Camera 2: only cans that are still good are photographed (NG cans are rejected anyway) */
+static void ev_code(CanRecord_t *r, TickType_t now, BaseType_t *woken)
+{
+    r->station_idx = STATION_IDX_REJECT;
+    if (r->status != CAN_STATUS_INSPECTED) {
+        return;
+    }
+    bsp_cam2_trigger_pulse();
+    r->status         = CAN_STATUS_CODE_WAIT;
+    r->timestamp_trig = now;
+    VisionTrigReq_t q = {r->can_id, VISION_CMD_TRIGGER_CODE};
+    xQueueSendFromISR(s_q_trig, &q, woken);
 }
 
 static void ev_reject(CanRecord_t *r)
 {
     r->station_idx = STATION_IDX_END;
-    if (r->status != CAN_STATUS_INSPECTED) {
+    /* Pass only fully verified cans: S5 (INSPECTED) and, with camera 2, DataMatrix OK.
+     * CODE_WAIT here means no result in time -> NG as well. */
+    const CanStatus_t good = CODE_CHECK_ENABLE ? CAN_STATUS_CODE_OK : CAN_STATUS_INSPECTED;
+    if (r->status != good) {
         /* every can not positively inspected is NG (incl. NG_CAMERA/VACUUM/LABEL) */
         do_set(DO_CYL_P8, true);
         s_p8_timer_ms = P8_PUSH_TIME_MS;
@@ -249,6 +299,7 @@ void tracking_tick_isr(void)
     for (uint8_t i = 0; i < can_fifo_count(&s_fifo); i++) {
         CanRecord_t *r = can_fifo_at(&s_fifo, i);
         vision_timeout_check(r, now);
+        code_timeout_check(r, now);
         if (r->flags & CAN_FLAG_HOLD) {
             continue;   /* held by P3: position frozen until re-anchored */
         }
@@ -265,6 +316,9 @@ void tracking_tick_isr(void)
             break;
         case STATION_IDX_INSPECT:
             if (d >= ENC_POS_INSPECT) ev_inspect(r);
+            break;
+        case STATION_IDX_CODE:
+            if (d >= ENC_POS_CODE_CAM) ev_code(r, now, &woken);
             break;
         case STATION_IDX_REJECT:
             if (d >= ENC_POS_REJECT) ev_reject(r);

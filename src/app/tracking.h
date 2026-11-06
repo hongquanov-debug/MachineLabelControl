@@ -8,6 +8,7 @@
  *      +3000  (minus pre-close) -> orient task queue  (VISION_OK cans only)
  *      +6500  (minus lead = v_belt * 210 ms) -> label task queue
  *      +9500  read S5 -> INSPECTED / LABEL_MISS
+ *      +10500 CAM2_TRIG pulse (DataMatrix), wait CODE_TIMEOUT_MS for the 0x21 result
  *      +12500 NG -> P8 reject
  *      +20000 pop record, update counters
  *
@@ -28,6 +29,12 @@ typedef struct {
     TickType_t tick;       /* when the event fired */
 } StationEvent_t;
 
+/** Trigger request for the Vision PC (cmd 0x10 camera 1, 0x11 camera 2). */
+typedef struct {
+    uint16_t can_id;
+    uint8_t  cmd;
+} VisionTrigReq_t;
+
 typedef struct {
     uint32_t fed;          /* cans detected at S2 */
     uint32_t ok;           /* cans leaving the belt with label OK */
@@ -39,7 +46,7 @@ void tracking_enable(bool en);             /* accept new cans at S2 */
 void tracking_clear(void);                 /* drop all records (E-Stop / purge) */
 
 /* Queues consumed by station tasks */
-QueueHandle_t tracking_q_vision_trig(void);   /* uint16_t can_id */
+QueueHandle_t tracking_q_vision_trig(void);   /* VisionTrigReq_t */
 QueueHandle_t tracking_q_orient(void);        /* StationEvent_t */
 QueueHandle_t tracking_q_label(void);         /* StationEvent_t */
 
@@ -53,6 +60,8 @@ uint32_t tracking_belt_pulses_per_s(void);
 uint16_t tracking_speed_cans_min(void);
 TrackingCounters_t tracking_counters(void);
 void     tracking_vision_result_ok(void);   /* reset consecutive timeout counter */
+/** Camera 2 result received: resets the timeout counter, counts consecutive NG (ALM_21). */
+void     tracking_code_result(bool ok);
 
 /* ISR / periodic hooks */
 void tracking_on_s2_isr(uint32_t enc_capture);

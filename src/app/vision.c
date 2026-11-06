@@ -45,6 +45,14 @@ typedef struct {
 static void apply_result(CanRecord_t *r, void *vctx)
 {
     ApplyCtx_t *c = (ApplyCtx_t *)vctx;
+    if (c->res->cmd == VISION_CMD_CODE_RESULT) {
+        /* camera 2: accepted only while the can is still waiting (not timed out) */
+        if (r->status == CAN_STATUS_CODE_WAIT) {
+            r->status = (c->res->quality == CODE_Q_OK) ? CAN_STATUS_CODE_OK : CAN_ERROR_CODE_NG;
+            c->accepted = true;
+        }
+        return;
+    }
     if (r->status != CAN_STATUS_VISION_WAIT) {
         return;  /* already timed out -> keep NG */
     }
@@ -64,10 +72,10 @@ void vision_task(void *arg)
     uint8_t buf[32];
     for (;;) {
         /* 1) pending trigger frames (optional, §2.2.A) */
-        uint16_t id;
-        while (xQueueReceive(tracking_q_vision_trig(), &id, 0) == pdTRUE) {
+        VisionTrigReq_t req;
+        while (xQueueReceive(tracking_q_vision_trig(), &req, 0) == pdTRUE) {
             uint8_t frame[VISION_TRIG_LEN];
-            vision_build_trigger(id, frame);
+            vision_build_trigger_cmd(req.cmd, req.can_id, frame);
             if (bsp_rs485_send(RS485_VISION, frame, VISION_TRIG_LEN, 5)) {
                 s_stats.tx_frames++;
             }
@@ -83,9 +91,21 @@ void vision_task(void *arg)
             ApplyCtx_t ctx = {&res, false};
             if (tracking_edit(res.can_id, apply_result, &ctx) && ctx.accepted) {
                 s_stats.rx_ok++;
-                tracking_vision_result_ok();
-                if (res.quality != VISION_Q_OK) {
-                    s_stats.rx_ng++;
+                if (res.cmd == VISION_CMD_CODE_RESULT) {
+                    bool ok = (res.quality == CODE_Q_OK);
+                    if (ok) {
+                        s_stats.code_ok++;
+                    } else {
+                        s_stats.code_ng++;
+                    }
+                    s_stats.code_last_q     = res.quality;
+                    s_stats.code_last_grade = res.grade;
+                    tracking_code_result(ok);
+                } else {
+                    tracking_vision_result_ok();
+                    if (res.quality != VISION_Q_OK) {
+                        s_stats.rx_ng++;
+                    }
                 }
             } else {
                 s_stats.rx_late++;

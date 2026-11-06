@@ -790,7 +790,8 @@ Các hàm sự kiện:
 | `ev_orient` | Chỉ lon `VISION_OK`: gửi sự kiện cho task orient, đặt cờ `HOLD`. Lon lỗi thì bỏ qua trạm |
 | `ev_label` | Chỉ lon `ORIENTED`: gửi sự kiện cho task label. Gửi **sớm 210 ms** vì chu kỳ dán cần 210 ms từ lúc mâm bắt đầu quay tới lúc ép tem |
 | `ev_inspect` | Lon `LABELED`: đọc S5 → `INSPECTED` hoặc `LABEL_MISS` |
-| `ev_reject` | Lon **không** `INSPECTED` → bật P8, hẹn 80 ms thu về, `REJECTED`, `ng++`. Ngược lại `PASSED` |
+| `ev_code` | (camera 2, 1050 mm) Lon `INSPECTED`: xung CAM2_TRIG, `CODE_WAIT`, gửi gói 0x11; kết quả 0x21 → `CODE_OK` / `CODE_NG`, quá 150 ms → NG |
+| `ev_reject` | Lon **không** `CODE_OK` (hoặc không `INSPECTED` nếu tắt camera 2) → bật P8, hẹn 80 ms thu về, `REJECTED`, `ng++`. Ngược lại `PASSED` |
 
 Quy tắc an toàn chất lượng: **chỉ lon đã được S5 xác nhận có tem mới được đi qua**; mọi trường hợp
 khác (lỗi Vision, hụt chân không, trạm bận, mất tem…) đều bị loại.

@@ -18,6 +18,7 @@ typedef enum {
     ALM_06_VACUUM_FEED_MISS  = 6,
     ALM_07_LABEL_TAPE_EMPTY  = 7,
     ALM_08_CYL_P5_TIMEOUT    = 8,
+    ALM_09_CODE_CAM_TIMEOUT  = 9,   /* ext: camera 2 gave no result 3 times in a row */
     ALM_10_DRIVER_M2_FAULT   = 10,
     ALM_11_SERVO_M3_FAULT    = 11,
     ALM_12_DRIVER_M4_FAULT   = 12,
@@ -31,6 +32,7 @@ typedef enum {
     ALM_19_VFD_COMM_LOST     = 19,
     /* --- */
     ALM_20_LI32_BUS_DISCONNECT = 20,
+    ALM_21_CODE_NG_REPEATED  = 21,  /* ext: N consecutive cans with bad / missing DataMatrix */
     ALM_CODE_MAX             = 25
 } AlarmCode_t;
 

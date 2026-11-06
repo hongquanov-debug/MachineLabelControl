@@ -36,4 +36,7 @@ bool bsp_s5_label_present(void);
 /* ---- camera trigger: 10 us pulse on CAM_TRIG (ISR safe) ---- */
 void bsp_cam_trigger_pulse(void);
 
+/* ---- camera 2 (DataMatrix) trigger: 10 us pulse on CAM2_TRIG (ISR safe) ---- */
+void bsp_cam2_trigger_pulse(void);
+
 #endif /* BSP_BOARD_H */

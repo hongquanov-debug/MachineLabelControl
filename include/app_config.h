@@ -32,6 +32,7 @@
 #define ENC_POS_ORIENT             3000      /* +300 mm  +/-1.5 mm */
 #define ENC_POS_LABEL              6500      /* +650 mm  +/-0.5 mm */
 #define ENC_POS_INSPECT            9500      /* +950 mm  +/-2.0 mm */
+#define ENC_POS_CODE_CAM           10500     /* +1050 mm camera 2 DataMatrix (TODO(HW): measure) */
 #define ENC_POS_REJECT             12500     /* +1250 mm +/-5.0 mm */
 #define ENC_POS_END                20000     /* +2000 mm */
 
@@ -41,8 +42,9 @@ enum {
     STATION_IDX_ORIENT  = 2,
     STATION_IDX_LABEL   = 3,
     STATION_IDX_INSPECT = 4,
-    STATION_IDX_REJECT  = 5,
-    STATION_IDX_END     = 6,
+    STATION_IDX_CODE    = 5,   /* extension: camera 2 DataMatrix */
+    STATION_IDX_REJECT  = 6,
+    STATION_IDX_END     = 7,
 };
 
 #define TRACKING_TICK_HZ           5000U     /* TIM6 tracking scan: 0.2 ms -> 0.06 mm @ 312 mm/s */
@@ -59,8 +61,26 @@ enum {
 #define VISION_TIMEOUT_MS          80U
 #define VISION_MAX_CONSEC_TIMEOUT  3U
 #define VISION_SEND_TRIGGER_PACKET 1         /* §2.2.A: optional trigger request frame */
+
+/* --- Camera 2: DataMatrix check after labeling (extension, see docs/VISION_PROTOCOL.md) ---
+ * The PC decodes the code and validates its content; the MCU only times the
+ * trigger, waits for the 0x21 result and rejects NG cans at P8.             */
+#ifndef CODE_CHECK_ENABLE
+#define CODE_CHECK_ENABLE          1         /* 0 = no camera 2 (S5 alone decides) */
+#endif
+#define CODE_TIMEOUT_MS            150U      /* camera 2 result window after CAM2_TRIG */
+#define CODE_MAX_CONSEC_TIMEOUT    3U        /* -> ALM_09 */
+#define CODE_MAX_CONSEC_NG         5U        /* -> ALM_21 (printer / label roll problem) */
+#ifndef LABEL_S5_CHECK_ENABLE
+#define LABEL_S5_CHECK_ENABLE      1         /* 0 = camera 2 replaces the S5 sensor */
+#endif
 #define RS485_DIR_SETUP_US         5U        /* §2.1: DIR before TX */
 #define RS485_DIR_HOLD_US          15U       /* §2.1: DIR after TC */
+
+#if CODE_CHECK_ENABLE
+_Static_assert(ENC_POS_CODE_CAM > ENC_POS_INSPECT && ENC_POS_CODE_CAM < ENC_POS_REJECT,
+               "camera 2 must sit between S5 and the reject cylinder P8");
+#endif
 
 /* ===================================================================== */
 /* §3 Labeling station (6 heads, M3 index 60 deg)                         */

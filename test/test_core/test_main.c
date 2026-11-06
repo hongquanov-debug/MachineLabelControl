@@ -80,6 +80,32 @@ static void test_vision_crc_error_rejected(void)
     TEST_ASSERT_EQUAL_UINT32(1, p.crc_errors);
 }
 
+static void test_vision_camera2_code_frames(void)
+{
+    uint8_t t[VISION_TRIG_LEN];
+    vision_build_trigger_cmd(VISION_CMD_TRIGGER_CODE, 300, t);
+    TEST_ASSERT_EQUAL_HEX8(0x11, t[2]);
+
+    VisionParser_t p;
+    vision_parser_init(&p);
+    VisionResult_t in = {.cmd = VISION_CMD_CODE_RESULT, .can_id = 300, .quality = CODE_Q_DUPLICATE,
+                         .grade = 3, .data_len = 42}, out;
+    uint8_t f[VISION_RESP_LEN];
+    vision_build_result(&in, f);
+    TEST_ASSERT_EQUAL_HEX8(0x21, f[2]);
+    bool got = false;
+    for (size_t i = 0; i < sizeof(f); i++) {
+        got = vision_parser_feed(&p, f[i], &out);
+    }
+    TEST_ASSERT_TRUE(got);
+    TEST_ASSERT_EQUAL_HEX8(VISION_CMD_CODE_RESULT, out.cmd);
+    TEST_ASSERT_EQUAL_UINT16(300, out.can_id);
+    TEST_ASSERT_EQUAL_UINT8(CODE_Q_DUPLICATE, out.quality);
+    TEST_ASSERT_EQUAL_UINT8(3, out.grade);
+    TEST_ASSERT_EQUAL_UINT8(42, out.data_len);
+    TEST_ASSERT_EQUAL_INT16(0, out.theta_x100);
+}
+
 /* ---------------- Tracking FIFO ---------------- */
 static void test_fifo_push_pop_wrap_find(void)
 {
@@ -296,6 +322,7 @@ int main(int argc, char **argv)
     RUN_TEST(test_vision_trigger_frame);
     RUN_TEST(test_vision_parse_with_noise_and_resync);
     RUN_TEST(test_vision_crc_error_rejected);
+    RUN_TEST(test_vision_camera2_code_frames);
     RUN_TEST(test_fifo_push_pop_wrap_find);
     RUN_TEST(test_can_distance_wraps);
     RUN_TEST(test_modbus_rtu_read_input);

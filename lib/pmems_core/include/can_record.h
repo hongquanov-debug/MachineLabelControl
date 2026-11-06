@@ -23,14 +23,20 @@ typedef enum {
     CAN_STATUS_INSPECTED   = 0x10,
     CAN_STATUS_REJECTED    = 0x20,
     CAN_STATUS_PASSED      = 0x40,
+    /* --- extension: camera 2 DataMatrix check (not in spec REV 3.2) --- */
+    CAN_STATUS_CODE_WAIT   = 0x11,  /* camera 2 triggered, waiting for 0x21 result */
+    CAN_STATUS_CODE_OK     = 0x12,  /* DataMatrix read and accepted */
+    /* --- */
     CAN_ERROR_VISION_NG    = 0x80,
     CAN_ERROR_VACUUM_MISS  = 0x81,
-    CAN_ERROR_LABEL_MISS   = 0x82
+    CAN_ERROR_LABEL_MISS   = 0x82,
+    CAN_ERROR_CODE_NG      = 0x83   /* extension: DataMatrix missing / unreadable / rejected */
 } CanStatus_t;
 
 /* Extension flags (not in spec REV 3.2) */
 #define CAN_FLAG_HOLD        0x01U  /**< Can physically held at a station (P3) - position frozen */
 #define CAN_FLAG_VISION_TMO  0x02U  /**< NG caused by Vision timeout (counts for ALM_05) */
+#define CAN_FLAG_CODE_TMO    0x04U  /**< NG caused by camera 2 timeout (counts for ALM_09) */
 
 typedef struct {
     uint16_t    can_id;            /**< Incrementing id (1 .. 65535) */
@@ -40,7 +46,7 @@ typedef struct {
     CanStatus_t status;            /**< Current status */
     uint32_t    timestamp_enter;   /**< Tick when can passed S2 */
     /* ---- Extensions (not in spec REV 3.2, required by implementation) ---- */
-    uint32_t    timestamp_trig;    /**< Tick of CAM_TRIG pulse (Vision timeout reference) */
+    uint32_t    timestamp_trig;    /**< Tick of CAM_TRIG / CAM2_TRIG pulse (timeout reference) */
     uint8_t     flags;             /**< CAN_FLAG_x */
 } CanRecord_t;
 

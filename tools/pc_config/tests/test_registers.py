@@ -39,7 +39,7 @@ class RecipeRegsTest(unittest.TestCase):
         self.assertEqual(len(bad.validate()), 4)
 
     def test_status_decode(self):
-        regs = [0] * 24
+        regs = [0] * 29
         regs[0], regs[1] = 4, 7
         regs[3], regs[4] = 0x0001, 0x0002      # fed = 0x00010002
         regs[18], regs[19] = 0, (1 << 7) | (1 << 6)
@@ -58,6 +58,15 @@ class RecipeRegsTest(unittest.TestCase):
         self.assertTrue(st.estop_ok and st.door_closed and st.io_bus_ok)
         self.assertFalse(st.air_ok_sw or st.reset_pressed)
         self.assertEqual(st.safety_ext_raw, 0x0B)
+
+    def test_status_camera2_counters(self):
+        regs = [0] * 29
+        regs[24], regs[25] = 0x0001, 0x0000    # 65536 OK
+        regs[26], regs[27] = 0, 12
+        regs[28] = (3 << 8) | 0x11
+        st = MachineStatus.from_regs(regs)
+        self.assertEqual((st.code_ok, st.code_ng), (65536, 12))
+        self.assertEqual((st.code_last_quality, st.code_last_grade), (0x11, 3))
 
 
 if __name__ == "__main__":

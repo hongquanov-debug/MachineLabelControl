@@ -29,6 +29,8 @@
  *           bit3 SAFETY BENCH MODE (safety chain ignored, KM1 locked off), bit4 safety via LI extension
  *        23 (30024) safety diagnostics: bit0 E-Stop released, bit1 door closed, bit2 air OK,
  *           bit3 reset pressed, bit4 I/O bus OK; high byte = raw LI extension byte (wiring check)
+ *        24..25 (30025..26) camera 2 DataMatrix OK count, 26..27 (30027..28) NG count,
+ *        28 (30029) last camera 2 result: low byte QUALITY_FLAG, high byte grade (4=A..0=F)
  */
 #ifndef MODBUS_REGS_H
 #define MODBUS_REGS_H

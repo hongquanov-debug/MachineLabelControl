@@ -11,6 +11,7 @@ Firmware bộ điều khiển trung tâm **dây chuyền chỉnh góc & dán tem
 | Ghi chú spec | [`docs/SPEC_NOTES.md`](docs/SPEC_NOTES.md) – mâu thuẫn trong spec & chân I/O cần xác nhận |
 | Người mới | [`docs/HAL_GUIDE.md`](docs/HAL_GUIDE.md) – hướng dẫn đọc code, khái niệm HAL & FreeRTOS |
 | Giải thích code | [`docs/CODE_WALKTHROUGH.md`](docs/CODE_WALKTHROUGH.md) – cấu trúc thư mục, giải thích từng module & luồng hoạt động |
+| Giao thức Vision | [`docs/VISION_PROTOCOL.md`](docs/VISION_PROTOCOL.md) – 2 camera: góc lệch (0x10/0x20) và DataMatrix (0x11/0x21) |
 | Giao diện PC | [`docs/ui/`](docs/ui/README.md) – bản mẫu HTML 1024×768 cho phần mềm PyQt6 |
 
 > ⚠️ Các chân không có trong spec quy trình được gán tạm và đánh dấu `TODO(HW)`.

@@ -13,6 +13,7 @@ static const uint8_t k_severity[ALM_CODE_MAX + 1] = {
     [ALM_06_VACUUM_FEED_MISS]    = ALM_SEV_WARNING,
     [ALM_07_LABEL_TAPE_EMPTY]    = ALM_SEV_DRAIN_STOP,
     [ALM_08_CYL_P5_TIMEOUT]      = ALM_SEV_STOP,
+    [ALM_09_CODE_CAM_TIMEOUT]    = ALM_SEV_STOP,
     [ALM_10_DRIVER_M2_FAULT]     = ALM_SEV_STOP,
     [ALM_11_SERVO_M3_FAULT]      = ALM_SEV_STOP,
     [ALM_12_DRIVER_M4_FAULT]     = ALM_SEV_STOP,
@@ -24,6 +25,7 @@ static const uint8_t k_severity[ALM_CODE_MAX + 1] = {
     [ALM_18_TRACKING_OVERFLOW]   = ALM_SEV_STOP,
     [ALM_19_VFD_COMM_LOST]       = ALM_SEV_STOP,
     [ALM_20_LI32_BUS_DISCONNECT] = ALM_SEV_STOP,
+    [ALM_21_CODE_NG_REPEATED]    = ALM_SEV_STOP,
 };
 
 void alarm_raise(AlarmCode_t code)

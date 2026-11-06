@@ -39,7 +39,7 @@ _O_ID, _O_NAME, _O_DIA, _O_H, _O_TAB, _O_M6, _O_SCALE = 0, 1, 9, 10, 11, 12, 13
 _O_SPEED, _O_OVERRUN, _O_DWELL, _O_VAC, _O_BLOW = 14, 15, 16, 17, 18
 
 # ---------------- input registers (3xxxx) ----------------
-IR_COUNT = 24           # 30001..30024
+IR_COUNT = 29           # 30001..30029
 
 PU_WHEEL_DIAMETER_MM = 95.0
 NAME_LEN = 16
@@ -91,12 +91,16 @@ ALARM_NAMES = {
     0: "NONE",
     1: "ESTOP_ACTIVATED", 2: "SAFETY_DOOR_OPEN", 3: "AIR_PRESSURE_LOW",
     4: "CABINET_OVERTEMP", 5: "VISION_TIMEOUT", 6: "VACUUM_FEED_MISS",
-    7: "LABEL_TAPE_EMPTY", 8: "CYL_P5_TIMEOUT", 10: "DRIVER_M2_FAULT",
+    7: "LABEL_TAPE_EMPTY", 8: "CYL_P5_TIMEOUT", 9: "CODE_CAM_TIMEOUT", 10: "DRIVER_M2_FAULT",
     11: "SERVO_M3_FAULT", 12: "DRIVER_M4_FAULT", 13: "DRIVER_M5_FAULT",
     14: "DRIVER_M6_FAULT", 15: "CYLINDER_TIMEOUT", 16: "HOMING_FAILED",
     17: "VFD_FAULT", 18: "TRACKING_OVERFLOW", 19: "VFD_COMM_LOST",
-    20: "LI32_BUS_DISCONNECT",
+    20: "LI32_BUS_DISCONNECT", 21: "CODE_NG_REPEATED",
 }
+
+CODE_QUALITY_NAMES = {0x00: "OK", 0x10: "NO_CODE", 0x11: "UNREADABLE", 0x12: "INVALID",
+                      0x13: "DUPLICATE", 0x14: "LOW_GRADE"}
+GRADE_LETTERS = {4: "A", 3: "B", 2: "C", 1: "D", 0: "F"}
 
 
 def _s16(v: int) -> int:
@@ -237,6 +241,10 @@ class MachineStatus:
     reset_pressed: bool = False       # 30024 bit3: SAFETY_RESET button
     io_bus_ok: bool = False           # 30024 bit4: LI cable OK
     safety_ext_raw: int = 0           # 30024 high byte: raw LI extension byte
+    code_ok: int = 0                  # 30025..26 camera 2 DataMatrix accepted
+    code_ng: int = 0                  # 30027..28 camera 2 DataMatrix NG
+    code_last_quality: int = 0        # 30029 low byte (CodeQ)
+    code_last_grade: int = 0          # 30029 high byte (4=A .. 0=F)
 
     @property
     def state_name(self) -> str:
@@ -286,4 +294,8 @@ class MachineStatus:
             reset_pressed=bool(r[23] & 8),
             io_bus_ok=bool(r[23] & 16),
             safety_ext_raw=r[23] >> 8,
+            code_ok=u32(24),
+            code_ng=u32(26),
+            code_last_quality=r[28] & 0xFF,
+            code_last_grade=r[28] >> 8,
         )

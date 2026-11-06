@@ -75,6 +75,7 @@ void bsp_board_init(void)
     gpio_out(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
     gpio_out(LED_RUN_PORT, LED_RUN_PIN, GPIO_PIN_RESET);
     gpio_out(CAM_TRIG_PORT, CAM_TRIG_PIN, GPIO_PIN_RESET);
+    gpio_out(CAM2_TRIG_PORT, CAM2_TRIG_PIN, GPIO_PIN_RESET);
 
     /* Bước 3: NGÕ VÀO.
      * Tín hiệu an toàn dùng PULLDOWN: nếu dây bị đứt, chân tự về 0 = "không an
@@ -151,4 +152,12 @@ void bsp_cam_trigger_pulse(void)
     CAM_TRIG_PORT->BSRR = CAM_TRIG_PIN;                    /* lên mức 1 */
     bsp_delay_us(CAM_TRIG_PULSE_US);
     CAM_TRIG_PORT->BSRR = (uint32_t)CAM_TRIG_PIN << 16U;   /* xuống mức 0 */
+}
+
+/** Xung 10 us kích camera 2 (kiểm tra mã DataMatrix sau khi dán). */
+void bsp_cam2_trigger_pulse(void)
+{
+    CAM2_TRIG_PORT->BSRR = CAM2_TRIG_PIN;
+    bsp_delay_us(CAM_TRIG_PULSE_US);
+    CAM2_TRIG_PORT->BSRR = (uint32_t)CAM2_TRIG_PIN << 16U;
 }

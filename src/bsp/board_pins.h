@@ -40,6 +40,8 @@
 /* ---------------- Camera trigger [SPEC] -------------------------------- */
 #define CAM_TRIG_PORT     GPIOD
 #define CAM_TRIG_PIN      GPIO_PIN_14
+#define CAM2_TRIG_PORT    GPIOD             /* [TODO(HW)] camera 2 (DataMatrix) trigger */
+#define CAM2_TRIG_PIN     GPIO_PIN_15
 
 /* ---------------- RS485_1: HMI Kinco, USART2 --------------------------- */
 #define RS485_1_TX_PORT   GPIOD             /* [TODO(HW)] PD5/PD6 remap (or PA2/PA3) */

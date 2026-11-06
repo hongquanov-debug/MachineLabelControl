@@ -15,6 +15,10 @@ typedef struct {
     uint32_t crc_errors;
     uint32_t frame_errors;
     uint32_t tx_frames;
+    uint32_t code_ok;       /* camera 2: DataMatrix accepted */
+    uint32_t code_ng;       /* camera 2: missing / unreadable / rejected */
+    uint8_t  code_last_q;   /* camera 2: last QUALITY_FLAG */
+    uint8_t  code_last_grade;
 } VisionStats_t;
 
 void vision_init(void);
