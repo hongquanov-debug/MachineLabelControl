@@ -30,12 +30,16 @@ pio test -e native
 ```
 
 - `controller1`: firmware cho STM32F407 (nạp bằng ST-Link).
+  FPU Cortex-M4F được bật bởi `scripts/fpu.py` (builder `stm32cube` mặc định không bật FPU,
+  khi đó FreeRTOS `port.c` báo lỗi `vstmdbeq ... not supported`). Sau khi đổi cờ build nên chạy
+  `pio run -t clean` một lần.
 - `native`: unit test trên máy tính cho thư viện lõi `lib/pmems_core` (Unity).
 
 ## 2. Cấu trúc dự án
 
 ```
 ├── platformio.ini            # env controller1 (STM32) + native (unit test)
+├── scripts/fpu.py            # bật FPU (-mfpu=fpv4-sp-d16 -mfloat-abi=hard) cho mọi thành phần
 ├── scripts/freertos.py       # build FreeRTOS + CMSIS-RTOS v2 từ framework-stm32cubef4
 ├── include/
 │   ├── app_config.h          # TẤT CẢ hằng số quy trình (tọa độ trạm, timing, động học...)
