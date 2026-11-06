@@ -1,3 +1,20 @@
+/**
+ * @file io.c
+ * @brief Task I/O 1 ms - "trái tim" đọc/ghi tín hiệu của máy.
+ *
+ *  Mỗi 1 ms task này:
+ *   1. Đọc 32 ngõ vào qua 74HCT165, kiểm tra tuột cáp (byte thứ 5 = 0xFF -> ALM_20).
+ *   2. Đọc chuỗi an toàn (E-Stop, cửa, khí nén). E-Stop -> cắt KM1 NGAY tại đây,
+ *      không chờ máy trạng thái (machine.c) xử lý.
+ *   3. Kiểm tra tín hiệu Alarm của các driver, cảm biến hết tem.
+ *   4. Xuất ảnh 24 ngõ ra ra 74HCT595.
+ *
+ *  Các module khác KHÔNG đọc phần cứng trực tiếp mà gọi di(DI_xxx) / do_set(DO_xxx, on).
+ *  Lợi ích: một nơi duy nhất truy cập phần cứng, dễ giả lập và gỡ lỗi.
+ *
+ *  vTaskDelayUntil(&last, 1 ms): chạy đúng chu kỳ 1 ms tính từ lần thức trước,
+ *  không bị trôi dần như vTaskDelay(1) (vốn tính từ lúc gọi).
+ */
 #include "io.h"
 
 #include "FreeRTOS.h"

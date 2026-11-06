@@ -1,3 +1,10 @@
+/*
+ * TÓM TẮT (tiếng Việt): trạm chỉnh góc.
+ *  Nhận sự kiện từ tracking -> đẩy chốt P3 ra chặn lon -> chờ lon tới -> kẹp P4
+ *  -> quay bánh PU (M2) một góc tính từ kết quả Vision -> nhả P4, rút P3.
+ *  Mỗi xi lanh có cảm biến từ; không thấy tín hiệu trong thời gian cho phép
+ *  -> ALM_15. Vì lon bị chặn lại, vị trí theo encoder được "đặt lại" khi nhả.
+ */
 #include "station_orient.h"
 
 #include "FreeRTOS.h"

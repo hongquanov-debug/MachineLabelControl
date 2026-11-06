@@ -1,3 +1,42 @@
+/**
+ * @file bsp_rs485.c
+ * @brief 3 cổng RS485 bán song công: nhận bằng DMA vòng + phát hiện IDLE,
+ *        gửi bằng DMA, tự điều khiển chân DIR (Spec Mục 2.1, Mục 7).
+ *
+ * ---------------------------------------------------------------------------
+ *  KIẾN THỨC NỀN CHO NGƯỜI MỚI
+ * ---------------------------------------------------------------------------
+ *  UART: truyền nối tiếp từng byte. RS485: chuẩn điện cho UART đi xa (hàng
+ *  trăm mét) trên 2 dây A/B. "Bán song công" = cùng một cặp dây nên tại một
+ *  thời điểm chỉ một bên được nói. IC chuyển đổi (MAX485...) có chân DIR:
+ *    DIR = 1 -> MCU đang phát,  DIR = 0 -> MCU đang nghe.
+ *
+ *  DMA (Direct Memory Access): bộ "chép dữ liệu" phần cứng. Khi nhận, mỗi
+ *  byte UART về được DMA tự chép vào mảng rx_buf mà CPU không phải xử lý
+ *  ngắt cho từng byte. Chế độ CIRCULAR: chép tới cuối mảng thì quay lại đầu.
+ *
+ *  IDLE line: UART báo khi đường truyền im lặng hơn 1 byte -> nghĩa là một
+ *  gói tin vừa kết thúc. Nhờ vậy nhận được gói có độ dài bất kỳ mà không cần
+ *  biết trước số byte.
+ *
+ *  Luồng xử lý của HAL khi nhận:
+ *    byte về -> DMA chép vào rx_buf -> đường im lặng -> ngắt USARTx
+ *    -> USARTx_IRQHandler() (stm32f4xx_it.c) -> HAL_UART_IRQHandler()
+ *    -> HAL gọi HAL_UARTEx_RxEventCallback(huart, size)  (hàm ở cuối file này)
+ *    -> ta chuyển các byte mới cho module ứng dụng qua con trỏ hàm rt->cb.
+ *
+ *  Luồng khi gửi:
+ *    task gọi bsp_rs485_send() -> DIR = 1 -> HAL_UART_Transmit_DMA()
+ *    -> task ngủ chờ semaphore -> phát xong byte cuối (cờ TC)
+ *    -> HAL gọi HAL_UART_TxCpltCallback() -> DIR = 0 -> đánh thức task.
+ *
+ *  Sơ đồ phần cứng 3 cổng:
+ *    RS485_1  USART2  HMI Kinco (Modbus RTU slave)   DMA1 Stream5 (RX) / Stream6 (TX), Channel 4
+ *    RS485_2  USART3  Biến tần M1 (Modbus master)     DMA1 Stream1 (RX) / Stream3 (TX), Channel 4
+ *    RS485_3  UART4   PC Vision (giao thức nhị phân)  DMA1 Stream2 (RX) / Stream4 (TX), Channel 4
+ *  (Stream/Channel lấy từ bảng "DMA1 request mapping" trong Reference Manual RM0090.)
+ * ---------------------------------------------------------------------------
+ */
 #include "bsp_rs485.h"
 
 #include <string.h>
@@ -12,6 +51,8 @@
 #define RX_BUF_SIZE 256U
 #define TX_BUF_SIZE 260U
 
+/* Cấu hình CỐ ĐỊNH của một cổng (nằm trong Flash, không đổi khi chạy).
+ * Gom vào bảng giúp một hàm init dùng chung cho cả 3 cổng. */
 typedef struct {
     /* static configuration */
     USART_TypeDef       *instance;
@@ -24,19 +65,27 @@ typedef struct {
     uint16_t             tx_pin, rx_pin, dir_pin;
 } PortHw_t;
 
+/* Dữ liệu LÚC CHẠY của một cổng (nằm trong RAM). Chứa các HAL Handle:
+ *   huart   : Handle của UART - HAL lưu trạng thái (đang gửi? đang nhận?) trong đó
+ *   hdma_rx : Handle của luồng DMA nhận
+ *   hdma_tx : Handle của luồng DMA gửi
+ * Lưu ý: DMA1 của F407 không truy cập được vùng RAM CCM (0x10000000), nên
+ * rx_buf/tx_buf phải nằm trong SRAM thường (mặc định của linker - OK).     */
 typedef struct {
     UART_HandleTypeDef huart;
     DMA_HandleTypeDef  hdma_rx;
     DMA_HandleTypeDef  hdma_tx;
-    SemaphoreHandle_t  tx_done;
-    rs485_rx_cb_t      cb;
+    SemaphoreHandle_t  tx_done;      /* "cờ" FreeRTOS: ISR báo cho task biết đã gửi xong */
+    rs485_rx_cb_t      cb;           /* hàm của module ứng dụng nhận dữ liệu */
     void              *ctx;
-    uint16_t           rx_pos;
+    uint16_t           rx_pos;       /* vị trí đã xử lý tới trong rx_buf */
     bool               tx_error;
     uint8_t            rx_buf[RX_BUF_SIZE];
     uint8_t            tx_buf[TX_BUF_SIZE];
 } PortRt_t;
 
+/* Cú pháp [RS485_HMI] = {...} (designated initializer) gán phần tử theo chỉ số
+ * enum, dễ đọc và không sợ nhầm thứ tự. */
 static const PortHw_t s_hw[RS485_PORT_COUNT] = {
     [RS485_HMI] = {USART2, DMA1_Stream5, DMA1_Stream6, DMA_CHANNEL_4,
                    USART2_IRQn, DMA1_Stream5_IRQn, DMA1_Stream6_IRQn, GPIO_AF7_USART2,
@@ -54,9 +103,12 @@ static const PortHw_t s_hw[RS485_PORT_COUNT] = {
 
 static PortRt_t s_rt[RS485_PORT_COUNT];
 
+/* Chân DIR: 1 = phát, 0 = nhận */
 static inline void dir_tx(Rs485Port_t p) { s_hw[p].dir_port->BSRR = s_hw[p].dir_pin; }
 static inline void dir_rx(Rs485Port_t p) { s_hw[p].dir_port->BSRR = (uint32_t)s_hw[p].dir_pin << 16U; }
 
+/* Callback của HAL dùng CHUNG cho mọi UART và chỉ đưa vào con trỏ huart.
+ * Hàm này tìm xem huart đó thuộc cổng nào của ta. */
 static int port_of(const UART_HandleTypeDef *h)
 {
     for (int i = 0; i < (int)RS485_PORT_COUNT; i++) {
@@ -67,14 +119,17 @@ static int port_of(const UART_HandleTypeDef *h)
     return -1;
 }
 
+/** Bắt đầu (hoặc khởi động lại) việc nhận bằng DMA vòng + IDLE. */
 static void start_rx(Rs485Port_t p)
 {
     PortRt_t *rt = &s_rt[p];
     rt->rx_pos = 0;
+    /* "Nhận tối đa RX_BUF_SIZE byte vào rx_buf, gọi callback khi đường IDLE".
+     * Vì DMA ở chế độ CIRCULAR nên việc nhận kéo dài mãi, không phải gọi lại. */
     if (HAL_UARTEx_ReceiveToIdle_DMA(&rt->huart, rt->rx_buf, RX_BUF_SIZE) != HAL_OK) {
         return;
     }
-    /* HT events are not needed: data is consumed on IDLE / TC */
+    /* Mặc định HAL còn báo khi DMA đầy nửa mảng (Half Transfer). Không cần nên tắt bớt. */
     __HAL_DMA_DISABLE_IT(&rt->hdma_rx, DMA_IT_HT);
 }
 
@@ -82,10 +137,11 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
 {
     const PortHw_t *hw = &s_hw[p];
     PortRt_t *rt = &s_rt[p];
-    memset(rt, 0, sizeof(*rt));
+    memset(rt, 0, sizeof(*rt));   /* Handle HAL phải được xóa 0 trước khi Init */
     rt->cb  = cb;
     rt->ctx = ctx;
 
+    /* ---- Bước 1: bật xung DMA1 và UART tương ứng ---- */
     __HAL_RCC_DMA1_CLK_ENABLE();
     switch (p) {
     case RS485_HMI:    __HAL_RCC_USART2_CLK_ENABLE(); break;
@@ -94,17 +150,18 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
     default: return;
     }
 
-    /* GPIO */
+    /* ---- Bước 2: chân TX/RX ở chế độ Alternate Function (nối vào UART) ---- */
     GPIO_InitTypeDef g = {0};
     g.Mode      = GPIO_MODE_AF_PP;
-    g.Pull      = GPIO_PULLUP;
+    g.Pull      = GPIO_PULLUP;               /* giữ RX ở mức 1 (rảnh) khi không có ai phát */
     g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    g.Alternate = hw->af;
+    g.Alternate = hw->af;                    /* AF7 cho USART2/3, AF8 cho UART4 */
     g.Pin       = hw->tx_pin;
     HAL_GPIO_Init(hw->tx_port, &g);
     g.Pin = hw->rx_pin;
     HAL_GPIO_Init(hw->rx_port, &g);
 
+    /* Chân DIR là GPIO output thường, mặc định 0 = đang nghe */
     GPIO_InitTypeDef d = {0};
     HAL_GPIO_WritePin(hw->dir_port, hw->dir_pin, GPIO_PIN_RESET);
     d.Pin   = hw->dir_pin;
@@ -112,12 +169,12 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
     d.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(hw->dir_port, &d);
 
-    /* DMA RX (circular) */
+    /* ---- Bước 3: DMA nhận (ngoại vi -> bộ nhớ, vòng tròn) ---- */
     rt->hdma_rx.Instance                 = hw->dma_rx_stream;
     rt->hdma_rx.Init.Channel             = hw->dma_channel;
     rt->hdma_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-    rt->hdma_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
-    rt->hdma_rx.Init.MemInc              = DMA_MINC_ENABLE;
+    rt->hdma_rx.Init.PeriphInc           = DMA_PINC_DISABLE;     /* luôn đọc cùng thanh ghi UART->DR */
+    rt->hdma_rx.Init.MemInc              = DMA_MINC_ENABLE;      /* ghi tăng dần trong rx_buf */
     rt->hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     rt->hdma_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
     rt->hdma_rx.Init.Mode                = DMA_CIRCULAR;
@@ -126,9 +183,11 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
     if (HAL_DMA_Init(&rt->hdma_rx) != HAL_OK) {
         error_handler();
     }
+    /* Liên kết 2 chiều UART <-> DMA: huart.hdmarx = &hdma_rx và hdma_rx.Parent = &huart.
+     * Nhờ vậy HAL_UART_xxx_DMA() biết dùng luồng DMA nào. */
     __HAL_LINKDMA(&rt->huart, hdmarx, rt->hdma_rx);
 
-    /* DMA TX (normal) */
+    /* ---- Bước 4: DMA gửi (bộ nhớ -> ngoại vi, chạy một lượt) ---- */
     rt->hdma_tx.Instance                 = hw->dma_tx_stream;
     rt->hdma_tx.Init.Channel             = hw->dma_channel;
     rt->hdma_tx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
@@ -144,7 +203,9 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
     }
     __HAL_LINKDMA(&rt->huart, hdmatx, rt->hdma_tx);
 
-    /* UART: 8 data bits; with parity the HAL word length must be 9 bits */
+    /* ---- Bước 5: cấu hình UART ----
+     * Bẫy hay gặp: với HAL STM32F4, WordLength TÍNH CẢ bit chẵn lẻ.
+     * 8 bit dữ liệu + parity (8E1 cho biến tần) => phải chọn UART_WORDLENGTH_9B. */
     rt->huart.Instance          = hw->instance;
     rt->huart.Init.BaudRate     = baud;
     rt->huart.Init.WordLength   = (parity == RS485_PARITY_NONE) ? UART_WORDLENGTH_8B : UART_WORDLENGTH_9B;
@@ -159,9 +220,11 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
         error_handler();
     }
 
+    /* Semaphore nhị phân: ISR "Give" khi gửi xong, task "Take" để chờ. */
     rt->tx_done = xSemaphoreCreateBinary();
     configASSERT(rt->tx_done != NULL);
 
+    /* ---- Bước 6: bật ngắt trong NVIC (mức 6: được gọi API FreeRTOS ...FromISR) ---- */
     HAL_NVIC_SetPriority(hw->irq_dma_rx, 6, 0);
     HAL_NVIC_EnableIRQ(hw->irq_dma_rx);
     HAL_NVIC_SetPriority(hw->irq_dma_tx, 6, 0);
@@ -172,22 +235,29 @@ void bsp_rs485_init(Rs485Port_t p, uint32_t baud, Rs485Parity_t parity, rs485_rx
     start_rx(p);
 }
 
+/**
+ * Gửi một gói tin. Hàm CHẶN (task ngủ cho tới khi gửi xong hoặc hết thời gian),
+ * chỉ gọi từ task, KHÔNG gọi trong ngắt.
+ */
 bool bsp_rs485_send(Rs485Port_t p, const uint8_t *data, uint16_t len, uint32_t timeout_ms)
 {
     PortRt_t *rt = &s_rt[p];
     if (len == 0U || len > TX_BUF_SIZE) {
         return false;
     }
+    /* Chép sang bộ đệm riêng: DMA đọc dần trong lúc gửi, nên vùng nhớ phải còn
+     * tồn tại suốt quá trình (biến cục bộ của người gọi có thể đã mất). */
     memcpy(rt->tx_buf, data, len);
-    (void)xSemaphoreTake(rt->tx_done, 0); /* clear stale */
+    (void)xSemaphoreTake(rt->tx_done, 0); /* xóa tín hiệu cũ còn sót */
     rt->tx_error = false;
 
-    dir_tx(p);
-    bsp_delay_us(RS485_DIR_SETUP_US);
+    dir_tx(p);                            /* chuyển IC RS485 sang phát */
+    bsp_delay_us(RS485_DIR_SETUP_US);     /* chờ 5 us cho IC ổn định (Spec 2.1) */
     if (HAL_UART_Transmit_DMA(&rt->huart, rt->tx_buf, len) != HAL_OK) {
         dir_rx(p);
         return false;
     }
+    /* Task ngủ ở đây (CPU đi làm việc khác) cho tới khi ISR gọi Give. */
     if (xSemaphoreTake(rt->tx_done, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
         HAL_UART_AbortTransmit(&rt->huart);
         dir_rx(p);
@@ -197,8 +267,16 @@ bool bsp_rs485_send(Rs485Port_t p, const uint8_t *data, uint16_t len, uint32_t t
 }
 
 /* ------------------------------------------------------------------------ */
-/* HAL callbacks (ISR context)                                              */
+/* HAL callbacks (ngữ cảnh NGẮT)                                             */
+/* Các hàm dưới đây ghi đè bản __weak trong HAL. HAL gọi chúng từ bên trong   */
+/* HAL_UART_IRQHandler() / HAL_DMA_IRQHandler(), nên phải chạy nhanh.          */
 /* ------------------------------------------------------------------------ */
+
+/**
+ * HAL gọi khi: đường truyền IDLE (hết gói), hoặc DMA chạy tới cuối mảng.
+ * @p size = vị trí ghi hiện tại của DMA trong rx_buf (0..RX_BUF_SIZE).
+ * Dữ liệu mới nằm từ rt->rx_pos tới size; nếu size < rx_pos tức DMA đã quay vòng.
+ */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
     int p = port_of(huart);
@@ -210,11 +288,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 
     if (size != rt->rx_pos) {
         if (size > rt->rx_pos) {
+            /* trường hợp thường: dữ liệu mới liền một khối */
             if (rt->cb) {
                 rt->cb(&rt->rx_buf[rt->rx_pos], (uint16_t)(size - rt->rx_pos), idle, rt->ctx);
             }
         } else {
-            /* wrapped */
+            /* DMA đã quay vòng: phần cuối mảng + phần đầu mảng */
             if (rt->cb) {
                 rt->cb(&rt->rx_buf[rt->rx_pos], (uint16_t)(RX_BUF_SIZE - rt->rx_pos), false, rt->ctx);
                 if (size > 0U) {
@@ -224,27 +303,33 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
         }
         rt->rx_pos = size;
     } else if (idle && rt->cb) {
-        rt->cb(NULL, 0, true, rt->ctx);
+        rt->cb(NULL, 0, true, rt->ctx);   /* chỉ báo "hết gói", không có byte mới */
     }
     if (rt->rx_pos >= RX_BUF_SIZE) {
         rt->rx_pos = 0;
     }
 }
 
+/** HAL gọi khi byte cuối cùng đã ra khỏi chân TX hoàn toàn (cờ TC). */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     int p = port_of(huart);
     if (p < 0) {
         return;
     }
-    /* TC flag is set: last stop bit is on the line. Hold DIR, then release. */
+    /* Giữ DIR thêm 15 us (Spec 2.1) rồi mới chuyển về nghe. Nếu chuyển sớm,
+     * bit stop cuối có thể bị cắt cụt và bên nhận báo lỗi khung. */
     bsp_delay_us(RS485_DIR_HOLD_US);
     dir_rx((Rs485Port_t)p);
+    /* Đánh thức task đang chờ trong bsp_rs485_send(). Trong ngắt phải dùng
+     * bản ...FromISR. Nếu task được đánh thức có ưu tiên cao hơn task đang
+     * chạy, portYIELD_FROM_ISR() chuyển sang nó ngay khi thoát ngắt. */
     BaseType_t woken = pdFALSE;
     xSemaphoreGiveFromISR(s_rt[p].tx_done, &woken);
     portYIELD_FROM_ISR(woken);
 }
 
+/** HAL gọi khi có lỗi: nhiễu, sai khung, tràn (overrun), lỗi DMA. */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     int p = port_of(huart);
@@ -253,14 +338,15 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
     PortRt_t *rt = &s_rt[p];
     if ((huart->ErrorCode & HAL_UART_ERROR_DMA) != 0U && huart->gState == HAL_UART_STATE_READY) {
-        /* TX DMA failed: release DIR and wake the sender */
+        /* DMA gửi bị lỗi: trả DIR về nghe và đánh thức task gửi */
         rt->tx_error = true;
         dir_rx((Rs485Port_t)p);
         BaseType_t woken = pdFALSE;
         xSemaphoreGiveFromISR(rt->tx_done, &woken);
         portYIELD_FROM_ISR(woken);
     }
-    /* Restart reception after framing/noise/overrun errors (HAL aborted RX DMA) */
+    /* Sau lỗi nhận, HAL đã dừng DMA nhận -> phải khởi động lại, nếu không
+     * cổng sẽ "điếc" vĩnh viễn. */
     if (huart->RxState == HAL_UART_STATE_READY) {
         start_rx((Rs485Port_t)p);
     }
@@ -274,7 +360,7 @@ void HAL_UART_AbortReceiveCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-/* IRQ dispatch */
+/* Gọi từ stm32f4xx_it.c: chuyển ngắt cho HAL xử lý; HAL sẽ gọi các callback ở trên. */
 void bsp_rs485_irq_uart(Rs485Port_t p)   { HAL_UART_IRQHandler(&s_rt[p].huart); }
 void bsp_rs485_irq_dma_rx(Rs485Port_t p) { HAL_DMA_IRQHandler(&s_rt[p].hdma_rx); }
 void bsp_rs485_irq_dma_tx(Rs485Port_t p) { HAL_DMA_IRQHandler(&s_rt[p].hdma_tx); }

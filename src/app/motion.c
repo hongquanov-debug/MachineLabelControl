@@ -1,3 +1,9 @@
+/*
+ * TÓM TẮT (tiếng Việt): lớp trục động cơ.
+ *  Đổi đơn vị kỹ thuật (độ, mm) sang số xung theo bảng k_axis[] (Spec Mục 4),
+ *  kiểm tra giới hạn mềm, bật/tắt driver và chạy về gốc (homing).
+ *  Phần phát xung thực sự nằm ở src/bsp/bsp_pulse.c.
+ */
 #include "motion.h"
 
 #include <math.h>

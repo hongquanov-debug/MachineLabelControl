@@ -1,3 +1,19 @@
+/**
+ * @file machine.c
+ * @brief Máy trạng thái của toàn hệ thống (Spec Mục 6.1), chạy mỗi 10 ms.
+ *
+ *  Máy trạng thái hữu hạn (FSM): tại mỗi thời điểm máy ở ĐÚNG MỘT trạng thái
+ *  (s_state). fsm_step() xét lệnh từ HMI/PC + tín hiệu an toàn + alarm để
+ *  quyết định có chuyển trạng thái không. Khi chuyển, enter(new_state) thực
+ *  hiện các hành động "vào trạng thái" (bật băng tải, cắt KM1, ...).
+ *
+ *    POWER_ON -> HOMING_REQUIRED -> HOMING_EXEC -> READY <-> AUTO_RUN <-> AUTO_PAUSE
+ *         \            ^                             |          |
+ *          -> ESTOP ---/          ALARM_STOP <-------/----------/
+ *
+ *  Lệnh từ HMI/PC không gọi trực tiếp vào đây mà được gửi vào hàng đợi
+ *  (machine_post_cmd) -> chỉ task machine thay đổi trạng thái, tránh xung đột.
+ */
 #include "machine.h"
 
 #include "FreeRTOS.h"

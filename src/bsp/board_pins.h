@@ -6,6 +6,15 @@
  * Pins marked [TODO(HW)] are NOT in the process spec - they are placeholders
  * chosen to avoid conflicts and MUST be checked against Hardware Spec V3.2
  * before flashing a real board.
+ *
+ * Cách đọc (cho người mới):
+ *  - Mỗi chân = một PORT (GPIOA..GPIOE, 16 chân mỗi port) + một số PIN.
+ *    Ví dụ PE2 = port GPIOE, GPIO_PIN_2.
+ *  - GPIO_PIN_x là MẶT NẠ BIT (GPIO_PIN_2 = 0x0004), nên có thể OR nhiều chân
+ *    để cấu hình cùng lúc: g.Pin = GPIO_PIN_0 | GPIO_PIN_1.
+ *  - Đổi chân phần cứng: chỉ sửa file này, code ở nơi khác dùng tên macro.
+ *  - Chân dùng cho ngoại vi (UART, timer, SPI, I2C) phải đúng chân có hỗ trợ
+ *    chức năng đó (bảng "Alternate function mapping" trong datasheet F407).
  */
 #ifndef BOARD_PINS_H
 #define BOARD_PINS_H

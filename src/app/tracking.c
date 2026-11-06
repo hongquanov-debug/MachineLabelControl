@@ -1,3 +1,22 @@
+/**
+ * @file tracking.c
+ * @brief Theo dõi từng lon trên băng tải bằng encoder (Spec Mục 1).
+ *
+ *  Ý tưởng: không cần cảm biến ở mỗi trạm. Khi lon đi qua S2, ta chụp số đếm
+ *  encoder (vị trí băng tải) lúc đó. Về sau, quãng đường lon đã đi =
+ *  (encoder hiện tại - encoder lúc qua S2). Khi quãng đường đạt tọa độ một
+ *  trạm (vd 6500 xung = 650 mm) thì kích trạm đó.
+ *
+ *  Ai chạy code này?
+ *  - tracking_on_s2_isr() : trong ngắt EXTI2 (cảm biến S2)
+ *  - tracking_tick_isr()  : trong ngắt TIM6, 5000 lần/giây
+ *  - các hàm còn lại      : từ task (vision, orient, label, io)
+ *  => FIFO dùng chung giữa ngắt và task nên mọi truy cập đều bọc crit_enter/exit.
+ *
+ *  Ngắt không được làm việc lâu (như điều khiển xi lanh). Nó chỉ gửi "sự kiện"
+ *  vào hàng đợi (queue) bằng xQueueSendFromISR(); task của trạm nhận sự kiện
+ *  và xử lý. Đây là mẫu thiết kế chuẩn: ISR ngắn + task làm việc nặng.
+ */
 #include "tracking.h"
 
 #include "alarm.h"

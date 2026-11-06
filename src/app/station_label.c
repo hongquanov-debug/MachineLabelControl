@@ -1,3 +1,12 @@
+/*
+ * TÓM TẮT (tiếng Việt): trạm dán tem 6 đầu hút.
+ *  Mỗi lon tới -> run_cycle(): mâm M3 quay 60 độ, sau đó trong thời gian dừng:
+ *   - đầu ở 0 độ  : bật hút, thổi hỗ trợ P7, M4 kéo tem tới khe (cảm biến SR21)
+ *   - đầu ở 60 độ : đọc công tắc chân không -> hút được tem chưa
+ *   - đầu ở 180 độ: hạ P5, ép tem, ngắt hút + thổi nhả, nâng P5
+ *  Vòng lặp dùng vTaskDelayUntil(1 ms) và so sánh thời gian t (ms từ đầu chu kỳ)
+ *  với các mốc của Spec 3.2 (160 ms hạ P5, 210 ms ép, ...).
+ */
 #include "station_label.h"
 
 #include <math.h>

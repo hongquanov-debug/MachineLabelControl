@@ -1,3 +1,9 @@
+/*
+ * TÓM TẮT (tiếng Việt): liên kết với PC Vision trên RS485_3.
+ *  Ngắt UART (rx_cb) đẩy byte nhận được vào StreamBuffer của FreeRTOS (bộ đệm
+ *  byte an toàn giữa ngắt và task). Task vision lấy byte ra, ghép thành gói
+ *  (vision_parser_feed) rồi ghi góc theta vào bản ghi của lon tương ứng.
+ */
 #include "vision.h"
 
 #include "FreeRTOS.h"

@@ -1,3 +1,17 @@
+/*
+ * TÓM TẮT (tiếng Việt):
+ *  app_create() (gọi từ main) tạo task "init" ưu tiên cao nhất. Task init khởi
+ *  tạo phần cứng theo đúng thứ tự (ngõ ra an toàn -> EEPROM/recipe -> trục ->
+ *  encoder -> UART -> tracking), tạo 10 task ứng dụng ở bảng k_tasks[] rồi tự
+ *  xóa mình (osThreadExit).
+ *
+ *  Thêm một task mới: viết hàm void my_task(void *arg) { for(;;) {...} },
+ *  thêm một dòng vào k_tasks[] với kích thước stack (byte) và mức ưu tiên.
+ *  Nếu bị tràn stack, vApplicationStackOverflowHook (error_handler.c) sẽ báo.
+ *
+ *  Mức ưu tiên task (osPriorityXxx) KHÁC với mức ưu tiên ngắt NVIC:
+ *  task số càng LỚN càng ưu tiên; ngắt NVIC số càng NHỎ càng ưu tiên.
+ */
 /**
  * Task map (CMSIS-RTOS v2)
  * ------------------------------------------------------------------------------

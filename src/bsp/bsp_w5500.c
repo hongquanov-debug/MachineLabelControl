@@ -1,3 +1,21 @@
+/**
+ * @file bsp_w5500.c
+ * @brief Driver tối giản cho chip Ethernet WIZnet W5500 qua SPI2 (Modbus TCP, Spec 7.3).
+ *
+ *  W5500 tự xử lý toàn bộ TCP/IP trong phần cứng, MCU chỉ đọc/ghi thanh ghi
+ *  của chip qua SPI. Mỗi giao dịch SPI gồm:
+ *     [địa chỉ 16 bit][byte điều khiển][dữ liệu ...]
+ *     byte điều khiển = BSB (khối: chung / thanh ghi socket n / bộ đệm TX / RX)
+ *                       | RWB (1 = ghi, 0 = đọc) | OM (00 = độ dài tùy ý)
+ *  Chân CS (chip select) kéo xuống 0 trong suốt một giao dịch.
+ *
+ *  Socket TCP server: OPEN -> LISTEN -> (máy SCADA/PC kết nối) ESTABLISHED
+ *  -> nhận/gửi dữ liệu -> CLOSE_WAIT khi bên kia ngắt -> DISCON -> CLOSED.
+ *  Dùng 4 socket cùng nghe cổng 502 để cho tối đa 4 kết nối cùng lúc.
+ *
+ *  Dùng HAL_SPI_Transmit()/HAL_SPI_Receive() kiểu blocking: đơn giản và đủ
+ *  nhanh (10.5 MHz) cho lưu lượng Modbus nhỏ. Tài liệu: W5500 Datasheet v1.0.x.
+ */
 #include "bsp_w5500.h"
 
 #include "FreeRTOS.h"
